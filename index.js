@@ -23,7 +23,7 @@ app.post("/login2", (req,res) => {
     db.query("SELECT * FROM contas_usuarios WHERE email = ?",[email] ,(err, result) => {
         if(err){
             res.send(err)
-        }
+        } 
         if(result.length > 0){
             bcrypt.compare(senha, result[0].senha, (erro, result) => {
                 if(result){
