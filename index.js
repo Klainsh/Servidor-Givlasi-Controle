@@ -16,7 +16,7 @@ const db = mysql.createPool({
 app.use(express.json());
 app.use(cors());
 
-app.post("/login2", (req,res) => {
+app.post("/login", (req,res) => {
     const email = req.body.email;
     const senha = req.body.senha;
 
@@ -38,6 +38,20 @@ app.post("/login2", (req,res) => {
         }
     })
 });
+
+app.post('/pega-id-loja', (req, res) => {
+    const email = req.body.email;
+
+    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email], (error, result) => {
+        if(error){
+            console.log(error);
+            res.send(error)
+        }else{
+            console.log(result[0])
+            res.send(result[0])
+        }
+    })
+})
 
 app.post("/cadastro", (req,res) => {
     const login = req.body.login;
