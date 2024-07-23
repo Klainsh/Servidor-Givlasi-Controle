@@ -6,11 +6,19 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
+var email_global = '';
+
 const db = mysql.createPool({
     host: "localhost",
     user: "root",
     password: "",
     database: "usuarios",
+});
+
+const db0 = mysql.createPool({
+    host: "localhost",
+    user: "root",
+    password: "",
 });
 
 app.use(express.json());
@@ -54,6 +62,7 @@ app.post('/pega-id-loja', (req, res) => {
 })
 
 app.post("/cadastro", (req,res) => {
+    email_global = req.body.email;//esse email aqui é global, para poder criar o BD da loja na hora que o usuario faz o cadastro.
     const login = req.body.login;
     const senha = req.body.senha;
     const email = req.body.email;
@@ -73,6 +82,7 @@ app.post("/cadastro", (req,res) => {
                     }
     
                     res.send({msg: "Cadastrado com sucesso!"});
+                    criaDatabaseDaLoja();
                 });
             })
         }else{
@@ -81,6 +91,22 @@ app.post("/cadastro", (req,res) => {
     });//PARA VALIDAR SE JÁ TEM ALGUM EMAIL IGUAL CADASTRADO NO BD
 });
 
+function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
+    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
+        if(error){
+            console.log(error);
+        }else{
+            //console.log(result[0].id_da_loja)
+            db0.query(`CREATE DATABASE IF NOT EXISTS loja${result[0].id_da_loja}`), function(err, result) {
+                if(err){
+                    console.log("Erro ao tentar criar Database")
+                }else{
+                    console.log("Database criada com sucesso!")
+                }
+            }
+        }
+    })
+}
 
 app.listen(port, () => {
     console.log(`Servidor iniciado na porta: ${port}`)
