@@ -7,6 +7,7 @@ const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
 var email_global = '';
+let id_Da_Loja_Global = '';
 
 const db = mysql.createPool({
     host: "localhost",
@@ -20,6 +21,13 @@ const db0 = mysql.createPool({
     user: "root",
     password: "",
 });
+
+const loja = mysql.createPool({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: `loja${id_Da_Loja_Global}`//botar a database da loja.
+})
 
 app.use(express.json());
 app.use(cors());
@@ -91,6 +99,22 @@ app.post("/cadastro", (req,res) => {
     });//PARA VALIDAR SE JÁ TEM ALGUM EMAIL IGUAL CADASTRADO NO BD
 });
 
+app.post("/cadastrar-produto", (req,res) => {
+    const codigo_produto = req.body.codigo_produto;
+    const produto = req.body.produto;
+    const tamanho_produto = req.body.tamanho_produto;
+    const estoque = req.body.estoque;
+    const valor_de_compra = req.body.valor_de_compra;
+    const valor_de_venda = req.body.valor_de_venda;
+    const sobre_o_produto = req.body.sobre_o_produto;
+    const sobre_a_venda = req.body.sobre_a_venda;
+    const lucro = req.body.lucro;
+    const local_armazenamento = req.body.local_armazenamento;
+    //const id_da_loja = req.body.id_da_loja;
+    //id_Da_Loja_Global = req.body.id_da_loja;
+
+})
+
 function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
     db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
         if(error){
@@ -104,6 +128,16 @@ function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o
                     console.log("Database criada com sucesso!")
                 }
             }
+        }
+    })
+}
+
+function criaTableProdutos(){
+    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
+        if(error){
+            console.log(error);
+        }else{
+            loja.query("CREATE TABLE IF NOT EXISTS")//COMEÇAR A CRIAR A TABELA DE PRODUTOS.
         }
     })
 }
