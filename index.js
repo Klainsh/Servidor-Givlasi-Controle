@@ -103,6 +103,7 @@ app.post("/cadastrar-produto", (req,res) => {
     const lucro = req.body.lucro;
     const local_armazenamento = req.body.local_armazenamento;
     const id_da_loja = req.body.id_da_loja;
+    console.log(id_da_loja);
 
     const loja = mysql.createPool({
         host: "localhost",
@@ -111,7 +112,15 @@ app.post("/cadastrar-produto", (req,res) => {
         database: `loja${id_da_loja}`,
     });
 
-    loja.query("INSERT INTO produtos(")
+    loja.query("INSERT INTO produtos(codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento) VALUES (?,?,?,?,?,?,?,?,?,?)",[codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento],(error) => {
+        if(error){
+            console.log("Ocorreu um erro ao tentar cadastrar o produto.")
+            console.log(error)
+        }else{
+            console.log(`Novo produto cadastrado com sucesso na loja: ${id_da_loja}`)
+            res.send({msg: "Cadastrado com sucesso!"})
+        }
+    })
 
 })
 
