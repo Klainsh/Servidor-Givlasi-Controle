@@ -7,7 +7,6 @@ const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
 var email_global = '';
-let id_Da_Loja_Global = '';
 
 const db = mysql.createPool({
     host: "localhost",
@@ -21,13 +20,6 @@ const db0 = mysql.createPool({
     user: "root",
     password: "",
 });
-
-const loja = mysql.createPool({
-    host: "localhost",
-    user: "root",
-    password: "",
-    database: `loja${id_Da_Loja_Global}`//botar a database da loja.
-})
 
 app.use(express.json());
 app.use(cors());
@@ -90,7 +82,7 @@ app.post("/cadastro", (req,res) => {
                     }
     
                     res.send({msg: "Cadastrado com sucesso!"});
-                    criaDatabaseDaLoja();
+                    criaDatabaseDaLoja();//também já cria as tabelas necessárias.
                 });
             })
         }else{
@@ -110,8 +102,16 @@ app.post("/cadastrar-produto", (req,res) => {
     const sobre_a_venda = req.body.sobre_a_venda;
     const lucro = req.body.lucro;
     const local_armazenamento = req.body.local_armazenamento;
-    //const id_da_loja = req.body.id_da_loja;
-    //id_Da_Loja_Global = req.body.id_da_loja;
+    const id_da_loja = req.body.id_da_loja;
+
+    const loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    });
+
+    loja.query("INSERT INTO produtos(")
 
 })
 
@@ -126,20 +126,63 @@ function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o
                     console.log("Erro ao tentar criar Database")
                 }else{
                     console.log("Database criada com sucesso!")
+                    id_Da_Loja_Global = result[0].id_da_loja;//passo o id da loja pra var global(usar pra criar a table)                  
                 }
             }
+
+            //acessa o banco de dados da loja.
+            const loja1 = mysql.createPool({
+                host: "localhost",
+                user: "root",
+                password: "",
+                database: `loja${result[0].id_da_loja}`,//botar a database da loja.
+            })
+            
+            //cria a tabela de produtos da loja.
+            loja1.query(`CREATE TABLE IF NOT EXISTS produtos(
+                        codigo_produto INT NOT NULL,
+                        produto VARCHAR(100) NOT NULL,
+                        tamanho_produto VARCHAR(11) NOT NULL,
+                        estoque INT(11) NOT NULL,
+                        valor_de_compra FLOAT NOT NULL,
+                        valor_de_venda FLOAT NOT NULL,
+                        sobre_o_produto FLOAT NOT NULL,
+                        sobre_a_venda FLOAT NOT NULL,
+                        lucro FLOAT NOT NULL,
+                        local_armazenamento VARCHAR(50) NULL,
+                        PRIMARY KEY(codigo_produto)
+                    )ENGINE=INNODB default charset = utf8;`,(err) => {
+                        if(err){
+                            console.log("Não foi possível criar a tabela de produtos!")
+                            console.log(err)
+                        }else{
+                            console.log("Table produtos criada com sucesso!")
+                        }
+                    })
+
         }
     })
 }
 
 function criaTableProdutos(){
-    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
-        if(error){
-            console.log(error);
-        }else{
-            loja.query("CREATE TABLE IF NOT EXISTS")//COMEÇAR A CRIAR A TABELA DE PRODUTOS.
-        }
-    })
+    console.log(`iD DA LOJA NO CRIA TABLE: ${id_Da_Loja_Global}`)
+    loja.query(`CREATE TABLE IF NOT EXISTS produtos(
+                codigo_produto INT NOT NULL,
+                produto VARCHAR(100) NOT NULL,
+                tamanho_produto VARCHAR(11) NOT NULL,
+                estoque INT(11) NOT NULL,
+                valor_de_compra FLOAT NOT NULL,
+                valor_de_venda FLOAT NOT NULL,
+                sobre_o_produto FLOAT NOT NULL,
+                sobre_a_venda FLOAT NOT NULL,
+                lucro FLOAT NOT NULL,
+                local_armazenamento VARCHAR(50) NULL,
+                PRIMARY KEY(codigo_produto)
+            )ENGINE=INNODB default charset = utf8;`,(err) => {
+                if(err){
+                    console.log("Não foi possível criar a tabela de produtos!")
+                }
+            })
 }
 
 app.listen(port, () => {
