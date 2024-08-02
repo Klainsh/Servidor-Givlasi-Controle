@@ -131,7 +131,25 @@ app.post("/cadastrar-produto", (req,res) => {
             })
         }
     })
+})
 
+app.post("/buscar-produto", (req,res) => {
+    const codigoProduto = req.body.codigoProduto;
+    const id_da_loja = req.body.id_da_loja;
+    const loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    });
+
+    var lista = [1,2,3,4,5,6,7,8,9,0]
+    console.log(lista.length)
+    for(n = lista.length; lista.length > 0; n--){
+
+    }
+    
+    
 })
 
 async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
