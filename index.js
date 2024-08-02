@@ -50,7 +50,7 @@ app.post("/login", (req,res) => {
 app.post('/pega-id-loja', (req, res) => {
     const email = req.body.email;
 
-    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email], (error, result) => {
+    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email], (error, result) => { 
         if(error){
             console.log(error);
             res.send(error)
@@ -112,63 +112,71 @@ app.post("/cadastrar-produto", (req,res) => {
         database: `loja${id_da_loja}`,
     });
 
-    loja.query("INSERT INTO produtos(codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento) VALUES (?,?,?,?,?,?,?,?,?,?)",[codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento],(error) => {
+    loja.query(`SELECT codigo_produto FROM produtos WHERE codigo_produto=${codigo_produto}`,(error, result) => {
         if(error){
-            console.log("Ocorreu um erro ao tentar cadastrar o produto.")
-            console.log(error)
+            console.log(`Erro: ${error}`)
+            res.send({msg:"Erro"})
+        }if(result.length > 0){
+            res.send({msg:"Já existe um produto cadastrado com esse código!"})
         }else{
-            console.log(`Novo produto cadastrado com sucesso na loja: ${id_da_loja}`)
-            res.send({msg: "Cadastrado com sucesso!"})
+            loja.query("INSERT INTO produtos(codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento) VALUES (?,?,?,?,?,?,?,?,?,?)",[codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento],(error) => {
+                if(error){
+                    console.log("Ocorreu um erro ao tentar cadastrar o produto.")
+                    console.log(error)
+                    res.send({msg:"Erro"})
+                }else{
+                    console.log(`Novo produto cadastrado com sucesso na loja: ${id_da_loja}`)
+                    res.send({msg: "Cadastrado com sucesso!"})
+                }
+            })
         }
     })
 
 })
 
-function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
+async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
     db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
         if(error){
             console.log(error);
         }else{
             //console.log(result[0].id_da_loja)
-            db0.query(`CREATE DATABASE IF NOT EXISTS loja${result[0].id_da_loja}`), function(err, result) {
+            db0.query(`CREATE DATABASE IF NOT EXISTS loja${result[0].id_da_loja}`,(err) => {
                 if(err){
                     console.log("Erro ao tentar criar Database")
                 }else{
                     console.log("Database criada com sucesso!")
-                    id_Da_Loja_Global = result[0].id_da_loja;//passo o id da loja pra var global(usar pra criar a table)                  
-                }
-            }
-
-            //acessa o banco de dados da loja.
-            const loja1 = mysql.createPool({
-                host: "localhost",
-                user: "root",
-                password: "",
-                database: `loja${result[0].id_da_loja}`,//botar a database da loja.
-            })
-            
-            //cria a tabela de produtos da loja.
-            loja1.query(`CREATE TABLE IF NOT EXISTS produtos(
-                        codigo_produto INT NOT NULL,
-                        produto VARCHAR(100) NOT NULL,
-                        tamanho_produto VARCHAR(11) NOT NULL,
-                        estoque INT(11) NOT NULL,
-                        valor_de_compra FLOAT NOT NULL,
-                        valor_de_venda FLOAT NOT NULL,
-                        sobre_o_produto FLOAT NOT NULL,
-                        sobre_a_venda FLOAT NOT NULL,
-                        lucro FLOAT NOT NULL,
-                        local_armazenamento VARCHAR(50) NULL,
-                        PRIMARY KEY(codigo_produto)
-                    )ENGINE=INNODB default charset = utf8;`,(err) => {
-                        if(err){
-                            console.log("Não foi possível criar a tabela de produtos!")
-                            console.log(err)
-                        }else{
-                            console.log("Table produtos criada com sucesso!")
-                        }
+                    id_Da_Loja_Global = result[0].id_da_loja;//passo o id da loja pra var global(usar pra criar a table)        
+                    //acessa o banco de dados da loja.
+                    const loja1 = mysql.createPool({
+                        host: "localhost",
+                        user: "root",
+                        password: "",
+                        database: `loja${result[0].id_da_loja}`,//botar a database da loja.
                     })
-
+                    
+                    //CRIA A TABELA DE PRODUTOS DA LOJA.
+                    loja1.query(`CREATE TABLE IF NOT EXISTS produtos(
+                                codigo_produto INT NOT NULL,
+                                produto VARCHAR(100) NOT NULL,
+                                tamanho_produto VARCHAR(11) NOT NULL,
+                                estoque INT(11) NOT NULL,
+                                valor_de_compra FLOAT NOT NULL,
+                                valor_de_venda FLOAT NOT NULL,
+                                sobre_o_produto FLOAT NOT NULL,
+                                sobre_a_venda FLOAT NOT NULL,
+                                lucro FLOAT NOT NULL,
+                                local_armazenamento VARCHAR(50) NULL,
+                                PRIMARY KEY(codigo_produto)
+                            )ENGINE=INNODB default charset = utf8;`,(erro) => {
+                                if(erro){
+                                    console.log("Não foi possível criar a tabela de produtos!")
+                                    console.log(erro)
+                                }else{
+                                    console.log("Table produtos criada com sucesso!")
+                                }
+                            })
+                }
+            })
         }
     })
 }
