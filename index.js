@@ -143,12 +143,18 @@ app.post("/buscar-produto", (req,res) => {
         database: `loja${id_da_loja}`,
     });
 
+    //Código para verificar os caracteres da lista
     var lista = [1,2,3,4,5,6,7,8,9,0]
-    console.log(lista.length)
-    for(n = lista.length; lista.length > 0; n--){
-
+    //Esse for é para pegar os caracteres do codigoProduto
+    for(c = 0; codigoProduto.length > c; c++){
+        for(i = 0; lista.length > i; i++){
+            if(codigoProduto[c] == lista[i]){
+                console.log(`Tem número: ${codigoProduto[c]}`)
+                res.send({msg:"Tem números!"})
+                break
+            }
+        }
     }
-    
     
 })
 
