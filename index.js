@@ -145,16 +145,34 @@ app.post("/buscar-produto", (req,res) => {
 
     //Código para verificar os caracteres da lista
     var lista = [1,2,3,4,5,6,7,8,9,0]
+    temNumero = false
     //Esse for é para pegar os caracteres do codigoProduto
-    for(c = 0; codigoProduto.length > c; c++){
-        for(i = 0; lista.length > i; i++){
-            if(codigoProduto[c] == lista[i]){
-                console.log(`Tem número: ${codigoProduto[c]}`)
-                res.send({msg:"Tem números!"})
-                break
+    for(n = 0; n < lista.length; n++ ){     
+        for(i = 0; i < codigoProduto.length; i++){
+            if(codigoProduto[i] == lista[n]){
+                console.log(`Tem número: ${codigoProduto[i]}`)
+                res.send({msg:"Tem número!"})
+                temNumero = true //envia o true para parar o outro for
+                loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`[codigoProduto], (err, result) => {
+                    
+                })
+
+                break;
             }
         }
+
+        //se apanhou true e teve um break no outro for, faz break a este tambem
+        if(temNumero){
+            break;
+        }
     }
+    if(temNumero === false){
+        res.send({msg:"NÃO tem número!"})
+    }
+    
+
+
+
     
 })
 
