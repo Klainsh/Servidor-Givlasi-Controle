@@ -134,6 +134,12 @@ app.post("/cadastrar-produto", (req,res) => {
 })
 
 app.post("/buscar-produto", (req,res) => {
+
+
+
+    //COMEÇAR A FAZER O VALIDADOR PARA SE NO CÓDIGO DO PRODUTO TIVER LETRAS E NÚMEROS, ELE PROCURAR POR NOME!
+
+
     const codigoProduto = req.body.codigoProduto;
     const id_da_loja = req.body.id_da_loja;
     const loja = mysql.createPool({
@@ -146,28 +152,51 @@ app.post("/buscar-produto", (req,res) => {
     //Código para verificar os caracteres da lista
     var lista = [1,2,3,4,5,6,7,8,9,0]
     temNumero = false
+    temLetra = false
     //Esse for é para pegar os caracteres do codigoProduto
+    //BUSCA O PRODUTO PELO CÓDIGO
     for(n = 0; n < lista.length; n++ ){     
         for(i = 0; i < codigoProduto.length; i++){
             if(codigoProduto[i] == lista[n]){
                 console.log(`Tem número: ${codigoProduto[i]}`)
                 res.send({msg:"Tem número!"})
                 temNumero = true //envia o true para parar o outro for
-                loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`[codigoProduto], (err, result) => {
-                    
+                loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
+                    if(error){
+                        console.log(error)
+                    }else{
+                        console.log(result[0].produto)
+                    }
                 })
-
                 break;
+            }else{
+                temLetra = true
             }
         }
 
+
+        //TENHO QUE VER A MELHOR FORMA AINDA DE FAZER ESSA MERDA!
+
         //se apanhou true e teve um break no outro for, faz break a este tambem
-        if(temNumero){
+        if(temNumero && temLetra){
+            //BUSCA O PRODUTO POR NOME
             break;
+        }else{
+
         }
     }
+
+    //Busca o produto pelo nome!
     if(temNumero === false){
         res.send({msg:"NÃO tem número!"})
+
+        loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
+            if(error){
+                console.log(error)
+            }else{
+                console.log(result[0].produto)         
+            }
+        })
     }
     
 
