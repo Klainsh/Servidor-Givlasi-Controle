@@ -134,12 +134,6 @@ app.post("/cadastrar-produto", (req,res) => {
 })
 
 app.post("/buscar-produto", (req,res) => {
-
-
-
-    //COMEÇAR A FAZER O VALIDADOR PARA SE NO CÓDIGO DO PRODUTO TIVER LETRAS E NÚMEROS, ELE PROCURAR POR NOME!
-
-
     const codigoProduto = req.body.codigoProduto;
     const id_da_loja = req.body.id_da_loja;
     const loja = mysql.createPool({
@@ -149,46 +143,35 @@ app.post("/buscar-produto", (req,res) => {
         database: `loja${id_da_loja}`,
     });
 
+    //atualizado 14/08/24
     //Código para verificar os caracteres da lista
-    var lista = [1,2,3,4,5,6,7,8,9,0]
+    var lista = [1,2,3,4,5,6,7,8,9,0] 
     temNumero = false
     temLetra = false
-    //Esse for é para pegar os caracteres do codigoProduto
-    //BUSCA O PRODUTO PELO CÓDIGO
-    for(n = 0; n < lista.length; n++ ){     
-        for(i = 0; i < codigoProduto.length; i++){
-            if(codigoProduto[i] == lista[n]){
-                console.log(`Tem número: ${codigoProduto[i]}`)
-                res.send({msg:"Tem número!"})
-                temNumero = true //envia o true para parar o outro for
-                loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
-                    if(error){
-                        console.log(error)
-                    }else{
-                        console.log(result[0].produto)
-                    }
-                })
-                break;
-            }else{
+    //vALIDA CARACTERES
+    for(n = 0; n < codigoProduto.length; n++){
+        for(i = 0; i < lista.length; i++){          
+            if(codigoProduto[n] == lista[i]){
+                //console.log(`Código produto: ${codigoProduto[n]} é igual a n/lista: ${lista[i]}`)
+                temNumero = true;
+            }else if(codigoProduto[n] != lista[i]){ 
+                console.log(`O Código produto: ${codigoProduto[n]} é diferente do n/lista: ${lista[i]}`)
                 temLetra = true
             }
         }
-
-
-        //TENHO QUE VER A MELHOR FORMA AINDA DE FAZER ESSA MERDA!
-
-        //se apanhou true e teve um break no outro for, faz break a este tambem
-        if(temNumero && temLetra){
-            //BUSCA O PRODUTO POR NOME
-            break;
-        }else{
-
-        }
     }
+    res.send({msg:"Loop finalizado!"})
+})
 
-    //Busca o produto pelo nome!
-    if(temNumero === false){
-        res.send({msg:"NÃO tem número!"})
+/* AREA RESERVADA PARA SALVAR UMAS COISINHAS
+        loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
+            if(error){
+                console.log(error)
+            }else{
+                console.log(result[0].produto)
+            }
+        })
+        break;
 
         loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
             if(error){
@@ -197,13 +180,10 @@ app.post("/buscar-produto", (req,res) => {
                 console.log(result[0].produto)         
             }
         })
-    }
-    
 
 
 
-    
-})
+*/
 
 async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
     db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
