@@ -143,24 +143,60 @@ app.post("/buscar-produto", (req,res) => {
         database: `loja${id_da_loja}`,
     });
 
-    //atualizado 14/08/24
     //Código para verificar os caracteres da lista
     var lista = [1,2,3,4,5,6,7,8,9,0] 
-    temNumero = false
-    temLetra = false
+    contaNumeros = 0 //faz a contagem para verificar quantos números tem no código que o usuario enviou!
     //vALIDA CARACTERES
+    //Verifica se tem números no código enviado, se tiver ele conta quantos tem!
     for(n = 0; n < codigoProduto.length; n++){
         for(i = 0; i < lista.length; i++){          
             if(codigoProduto[n] == lista[i]){
-                //console.log(`Código produto: ${codigoProduto[n]} é igual a n/lista: ${lista[i]}`)
-                temNumero = true;
-            }else if(codigoProduto[n] != lista[i]){ 
-                console.log(`O Código produto: ${codigoProduto[n]} é diferente do n/lista: ${lista[i]}`)
-                temLetra = true
+                contaNumeros ++
             }
         }
     }
-    res.send({msg:"Loop finalizado!"})
+
+    //Executa as ações baseadas na demanda.
+    if(contaNumeros == codigoProduto.length){ //Caso tenha apenas números no código, busca pelo código.
+        res.send({msg:"Busca produto pelo código!"}) 
+        loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
+            if(error){
+                console.log(error)
+            }else{
+                if(result.length > 0){
+                    console.log(result[0].produto)    
+                }else{
+                    console.log("Nenhúm resultado encontrado!")
+                }  
+            }
+        })
+    }else if(contaNumeros == 0){ //Caso não tenha números, busca pelo nome.
+        res.send({msg:"Busca o produto pelo nome!"})
+        loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
+            if(error){
+                console.log(error)
+            }else{
+                if(result.length > 0){
+                    console.log(result[0].produto)    
+                }else{
+                    console.log("Nenhúm resultado encontrado!")
+                }                  
+            }
+        })
+    }else{//Em outros casos, busca pelo nome também.
+        res.send({msg:"Busca o produto pelo nome também!"})
+        loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
+            if(error){
+                console.log(error)
+            }else{
+                if(result.length > 0){
+                    console.log(result[0].produto)    
+                }else{
+                    console.log("Nenhúm resultado encontrado!")
+                }       
+            }
+        })
+    }
 })
 
 /* AREA RESERVADA PARA SALVAR UMAS COISINHAS
