@@ -156,11 +156,13 @@ app.post("/buscar-produto", (req,res) => {
         }
     }
 
+    
     //Executa as ações baseadas na demanda.
     if(contaNumeros == codigoProduto.length){ //Caso tenha apenas números no código, busca pelo código.
         res.send({msg:"Busca produto pelo código!"}) 
         loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
             if(error){
+                res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error)
             }else{
                 if(result.length > 0){
@@ -171,15 +173,26 @@ app.post("/buscar-produto", (req,res) => {
             }
         })
     }else if(contaNumeros == 0){ //Caso não tenha números, busca pelo nome.
-        res.send({msg:"Busca o produto pelo nome!"})
+        //res.send({msg:"Busca o produto pelo nome!"})
         loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
             if(error){
+                res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error)
             }else{
+                //LISTA COM OS PRODUTOS ENCONTRADOS NO BANCO DE DADOS!
+                var listaProdutos = [];
                 if(result.length > 0){
-                    console.log(result[0].produto)    
+                    for(r = 0; r < result.length; r++){
+                        console.log(result[r].produto) 
+                        //listaProdutos.push("Banana");  
+                        //listaProdutos.push("Maçã");  
+                        //listaProdutos.push("Uva");  
+                        //res.send(result[0].produto)  
+                    }  
+                    res.send(listaProdutos)  
                 }else{
                     console.log("Nenhúm resultado encontrado!")
+                    //res.send({msg:"Nenhúm resultado encontrado!"})
                 }                  
             }
         })
@@ -187,12 +200,17 @@ app.post("/buscar-produto", (req,res) => {
         res.send({msg:"Busca o produto pelo nome também!"})
         loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
             if(error){
+                res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error)
             }else{
                 if(result.length > 0){
-                    console.log(result[0].produto)    
+                    for(r = 0; r < result.length; r++){
+                        console.log(result[r].produto)   
+                        res.send({msg:result[r]})
+                    }    
                 }else{
                     console.log("Nenhúm resultado encontrado!")
+                    res.send({msg:"Nenhúm resultado encontrado!"})
                 }       
             }
         })
