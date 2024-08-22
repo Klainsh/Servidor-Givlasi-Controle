@@ -165,10 +165,11 @@ app.post("/buscar-produto", (req,res) => {
                 console.log(error)
             }else{
                 if(result.length > 0){
-                    res.send(result[0].produto)  
-                    console.log(result[0].produto)
+                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda },])  
+                    console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda },)
                 }else{
-                    console.log("Nenhúm resultado encontrado!")
+                    res.send({msg:"Nenhum resultado encontrado!"})
+                    console.log("Nenhum resultado encontrado!")
                 }  
             }
         })
@@ -190,7 +191,7 @@ app.post("/buscar-produto", (req,res) => {
                     console.log(listaProdutos)
                 }else{
                     console.log("Nenhúm resultado encontrado!")
-                    //res.send({msg:"Nenhúm resultado encontrado!"})
+                    res.send({msg:"Nenhum resultado encontrado!"})
                 }                  
             }
         })
@@ -200,14 +201,17 @@ app.post("/buscar-produto", (req,res) => {
                 res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error)
             }else{
+                //LISTA COM OS PRODUTOS ENCONTRADOS NO BANCO DE DADOS!
+                var listaProdutos = [];
                 if(result.length > 0){
                     for(r = 0; r < result.length; r++){
-                        console.log(result[r].produto)   
-                        res.send({msg:result[r]})
+                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda },)
                     }    
+                    res.send(listaProdutos)  
+                    console.log(listaProdutos)
                 }else{
                     console.log("Nenhúm resultado encontrado!")
-                    res.send({msg:"Nenhúm resultado encontrado!"})
+                    res.send({msg:"Nenhum resultado encontrado!"})
                 }       
             }
         })
