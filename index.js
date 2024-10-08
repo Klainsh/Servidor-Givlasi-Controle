@@ -165,8 +165,8 @@ app.post("/buscar-produto", (req,res) => {
                 console.log(error)
             }else{
                 if(result.length > 0){
-                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda },])  
-                    console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda },)
+                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },])  
+                    console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },)
                 }else{
                     res.send({msg:"Nenhum resultado encontrado!"})
                     console.log("Nenhum resultado encontrado!")
@@ -185,7 +185,7 @@ app.post("/buscar-produto", (req,res) => {
                 if(result.length > 0){
                     for(r = 0; r < result.length; r++){  
                         //listaProdutos.push(result[r].produto)  //Adiciona cada resultado a listaProdutos
-                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda },)
+                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque },)
                     }
                     res.send(listaProdutos)  
                     console.log(listaProdutos)
@@ -205,7 +205,7 @@ app.post("/buscar-produto", (req,res) => {
                 var listaProdutos = [];
                 if(result.length > 0){
                     for(r = 0; r < result.length; r++){
-                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda },)
+                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque },)
                     }    
                     res.send(listaProdutos)  
                     console.log(listaProdutos)
