@@ -7,6 +7,7 @@ const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
 var email_global = '';
+var id_Da_Loja_Global ='';
 
 const db = mysql.createPool({
     host: "localhost",
@@ -256,7 +257,8 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
                     console.log("Erro ao tentar criar Database")
                 }else{
                     console.log("Database criada com sucesso!")
-                    id_Da_Loja_Global = result[0].id_da_loja;//passo o id da loja pra var global(usar pra criar a table)        
+                    id_Da_Loja_Global = result[0].id_da_loja;//passo o id da loja pra var global(usar pra criar a table)     
+                    criaDatabase_Vendas_Da_Loja();//Cria a database que armazena as vendas da loja!   
                     //acessa o banco de dados da loja.
                     const loja1 = mysql.createPool({
                         host: "localhost",
@@ -288,6 +290,16 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
                             })
                 }
             })
+        }
+    })
+}
+
+async function criaDatabase_Vendas_Da_Loja(){
+    db0.query(`CREATE DATABASE IF NOT EXISTS vendas_loja${id_Da_Loja_Global}`,(err) => {
+        if(err){
+            console.log("Erro ao tentar criar Database")
+        }else{
+            console.log("Database de vendas da loja criada com sucesso!")          
         }
     })
 }
