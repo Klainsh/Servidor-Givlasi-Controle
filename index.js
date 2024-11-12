@@ -167,7 +167,7 @@ app.post("/buscar-produto", (req,res) => {
             }else{
                 if(result.length > 0){
                     res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },])  
-                    console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },)
+                    //console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },)
                 }else{
                     res.send({msg:"Nenhum resultado encontrado!"})
                     console.log("Nenhum resultado encontrado!")
@@ -189,7 +189,7 @@ app.post("/buscar-produto", (req,res) => {
                         listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque },)
                     }
                     res.send(listaProdutos)  
-                    console.log(listaProdutos)
+                    //console.log(listaProdutos)
                 }else{
                     console.log("Nenhúm resultado encontrado!")
                     res.send({msg:"Nenhum resultado encontrado!"})
@@ -302,6 +302,87 @@ async function criaDatabase_Vendas_Da_Loja(){
             console.log("Database de vendas da loja criada com sucesso!")          
         }
     })
+}
+
+app.post("/finalizar-venda", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    var listaDosProdutosVendidos = req.body.produtos_Vendidos;
+    //PARTE EM TESTE------------
+    contador = 0;
+    const acessa_Database_Vendas_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `vendas_loja${id_da_loja}`,
+    });
+    acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (err,result) => {
+        if(err){
+            console.log("Erro ao consultar tabelas de vendas")
+        }else{
+            for(i = 0; i < result.length; i++){
+                resultado = result[i].Tables_in_vendas_loja105;
+                //console.log(`Resultado: ${result[i].Tables_in_vendas_loja105}`)
+                if(resultado.substr(-8) == dataSistema()){
+                    contador ++
+                }               
+            }
+
+            //Retorna o nome a ser usado na próxima tabela.
+            var nomeDaTabela = `venda${contador+1}${dataSistema()}`
+
+            //Cria a tabela que vai ficar os dados da venda.
+            acessa_Database_Vendas_Loja.query(`CREATE TABLE IF NOT EXISTS ${nomeDaTabela}(
+                                                cod_produto int not null,
+                                                produto varchar(41) not null,
+                                                unidades int not null,
+                                                preco float not null)Default charset=utf8;`)
+
+            //console.log(nomeDaTabela)
+                
+            //Parte que insere os produtos da venda na tabela.
+            if(listaDosProdutosVendidos.length != 0){
+                for(produtos = 0; produtos < listaDosProdutosVendidos.length; produtos ++){
+                    console.log(listaDosProdutosVendidos[produtos][1])
+                    acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,   preco) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]})`, (erro) => {
+                        if(erro){
+                            console.log(`Erro ao tentar cadastrar os produtos ${erro}`)
+                        }else{
+                            console.log("Produtos da venda foram inseridos com sucesso na tabela!")
+                        }
+                    })
+                }
+                
+            }else{
+                res.send({msg:"Erro!"})
+            }
+            //Fim da parte que insere os produtos na tabela.
+        }      
+    })
+    //FINAL DA PARTE EM TESTE ---------
+})
+
+function dataSistema(){
+    const date = new Date();
+    var data = (`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
+    //console.log(`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
+    return data
+}
+
+function criaNomeDaTabelaVendaPorData(){
+    contador = 1;
+    const acessa_Database_Vendas_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `vendas_loja${id_da_loja}`,
+    });
+    acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (err,result) => {
+        for(i = 0; i < result.length; i++){
+            console.log(result[i])
+        }
+    })
+
+
 }
 
 function criaTableProdutos(){
