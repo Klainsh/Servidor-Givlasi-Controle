@@ -304,6 +304,7 @@ async function criaDatabase_Vendas_Da_Loja(){
     })
 }
 
+//TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
 app.post("/finalizar-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     var listaDosProdutosVendidos = req.body.produtos_Vendidos;
@@ -315,18 +316,24 @@ app.post("/finalizar-venda", (req,res) => {
         password: "",
         database: `vendas_loja${id_da_loja}`,
     });
+
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    })
     acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (err,result) => {
         if(err){
             console.log("Erro ao consultar tabelas de vendas")
         }else{
+            //Conta quantas tabelas de vendas tem na loja.
             for(i = 0; i < result.length; i++){
-                resultado = result[i].Tables_in_vendas_loja105;
-                //console.log(`Resultado: ${result[i].Tables_in_vendas_loja105}`)
-                if(resultado.substr(-8) == dataSistema()){
+                resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];
+                if(resultado.substr(-8) == dataSistema()){                  
                     contador ++
                 }               
             }
-
             //Retorna o nome a ser usado na próxima tabela.
             var nomeDaTabela = `venda${contador+1}${dataSistema()}`
 
@@ -335,31 +342,100 @@ app.post("/finalizar-venda", (req,res) => {
                                                 cod_produto int not null,
                                                 produto varchar(41) not null,
                                                 unidades int not null,
-                                                preco float not null)Default charset=utf8;`)
+                                                preco float not null)Default charset=utf8;`, (erro) => {
+                                                    if(erro){
+                                                        console.log(`Erro ao tentar criar tabela da venda ERRO: ${erro}`)
+                                                        res.send({msg:"Erro!"})
+                                                    }else{
+                                                        //Parte que insere os produtos da venda na tabela.
+                                                        if(listaDosProdutosVendidos.length != 0){
+                                                            for(produtos = 0; produtos < listaDosProdutosVendidos.length; produtos ++){
+                                                                acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,   preco) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]})`, (erro) => {
+                                                                    if(erro){
+                                                                        console.log(`Erro ao tentar cadastrar os produtos ${erro}`)
+                                                                        res.send({msg:"Erro!"})
+                                                                    }else{
+                                                                        console.log("Produtos da venda foram inseridos com sucesso na tabela!")
+                                                                        res.send({msg:"Sucesso!"})
+                                                                        
+                                                                    }
+                                                                })
+                                                            }                                                                                  
+                                                            //REMOVE AS UNIDADES DOS PRODUTOS QUE FORAM VENDIDOS.
+                                                            for(i = 0; i < listaDosProdutosVendidos.length; i ++){
+                                                                unidades_vendidas = listaDosProdutosVendidos[i][2];
+                                                                codigo_Do_Produto = listaDosProdutosVendidos[i][0]
+                                                                acessa_Database_Da_Loja.query(`SELECT estoque FROM produtos WHERE codigo_produto=${codigo_Do_Produto}`, (error, resultado) => {
+                                                                    if(error){
+                                                                        console.log('Não foi possível remover as unidades dos produtos vendidos.')
+                                                                        res.send({msg:"Não foi possível remover do estoque os produtos vendidos!"})
+                                                                    }else{
+                                                                        subtrai_Estoque = (resultado[0].estoque - unidades_vendidas)
+                                                                        console.log(subtrai_Estoque)
+                                                                        acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${codigo_Do_Produto}`)
+                                                                    }
+                                                                })
+                                                            }
+                                                            //FIM DO REMOVE AS UNIDADES VENDIDAS 
+                                                        }else{
+                                                            res.send({msg:"Erro!"})
+                                                        }
+                                                        //Fim da parte que insere os produtos na tabela.
+                                                    }
+            })
 
-            //console.log(nomeDaTabela)
-                
-            //Parte que insere os produtos da venda na tabela.
-            if(listaDosProdutosVendidos.length != 0){
-                for(produtos = 0; produtos < listaDosProdutosVendidos.length; produtos ++){
-                    console.log(listaDosProdutosVendidos[produtos][1])
-                    acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,   preco) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]})`, (erro) => {
-                        if(erro){
-                            console.log(`Erro ao tentar cadastrar os produtos ${erro}`)
-                        }else{
-                            console.log("Produtos da venda foram inseridos com sucesso na tabela!")
-                        }
-                    })
-                }
-                
-            }else{
-                res.send({msg:"Erro!"})
+            /*
+            //REMOVE AS UNIDADES DOS PRODUTOS QUE FORAM VENDIDOS.
+            for(i = 0; i < listaDosProdutosVendidos.length; i ++){
+                unidades_vendidas = listaDosProdutosVendidos[i][2];
+                acessa_Database_Da_Loja.query(`SELECT * FROM produtos WHERE codigo_produto=${listaDosProdutosVendidos[i][0]}`, (error, resultado) => {
+                    if(error){
+                        console.log(`Erro ao consultar as unidades vendidas! Erro:${error}`)
+                    }else{
+                        subtrai_Estoque = (resultado[0].estoque - unidades_vendidas)
+                        console.log(subtrai_Estoque)
+                        acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${listaDosProdutosVendidos[i][0]}`, (erro) => {
+                            if(erro){
+                                console.log(`Erro ao tentar atualizar o estoque dos produtos erro: ${erro}`)
+                            }else{
+                                console.log("Tudo ocorreu bem!")
+                            }
+                        })
+                    }
+                })
             }
-            //Fim da parte que insere os produtos na tabela.
+            //FIM DO REMOVE AS UNIDADES VENDIDAS
+            */
         }      
     })
     //FINAL DA PARTE EM TESTE ---------
 })
+
+//SEPARA AS FUNÇÕES DO FINALIZAR VENDA:
+/*
+//REMOVE AS UNIDADES DOS PRODUTOS QUE FORAM VENDIDOS.
+                                                            for(produtos = 0; produtos < listaDosProdutosVendidos.length; produtos ++){
+                                                                unidades_vendidas = listaDosProdutosVendidos[produtos][2];
+                                                                acessa_Database_Da_Loja.query(`SELECT * FROM produtos WHERE codigo_produto=${listaDosProdutosVendidos[produtos][0]}`, (error, resultado) => {
+                                                                    if(error){
+                                                                        console.log(`Erro ao consultar as unidades vendidas! Erro:${error}`)
+                                                                    }else{
+                                                                        subtrai_Estoque = (resultado[0].estoque - unidades_vendidas)
+                                                                        console.log(subtrai_Estoque)
+                                                                        acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${listaDosProdutosVendidos[produtos][0]}`, (erro) => {
+                                                                            if(erro){
+                                                                                console.log(`Erro ao tentar atualizar o estoque dos produtos erro: ${erro}`)
+                                                                            }else{
+                                                                                console.log("Tudo ocorreu bem!")
+                                                                            }
+                                                                        })
+                                                                    }
+                                                                })
+                                                            }
+                                                            //FIM DO REMOVE AS UNIDADES VENDIDAS
+*/
+
+
 
 function dataSistema(){
     const date = new Date();
