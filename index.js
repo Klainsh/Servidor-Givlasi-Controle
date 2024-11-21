@@ -358,8 +358,6 @@ app.post("/finalizar-venda", (req,res) => {
                                                             }   
                                                             //Fim da parte que insere os produtos da venda na tabela.  
 
-                                                            //REFAZER A PARTE QUE REMOVE OS PRODUTOS DO ESTOQUE!
-
                                                             res.send({msg:"Sucesso!"})//Finalizou todo o processo.
                                                         }else{
                                                             res.send({msg:"Erro!"})
@@ -367,6 +365,29 @@ app.post("/finalizar-venda", (req,res) => {
                                                         //Fim da parte que insere os produtos na tabela.
                                                     }
             })
+
+            //REFAZER A PARTE QUE REMOVE OS PRODUTOS DO ESTOQUE!
+            for(i = 0; i < listaDosProdutosVendidos.length; i++){
+                const codigo_Do_Produto = listaDosProdutosVendidos[i][0]
+                const nome_Do_Produto_Vendido = listaDosProdutosVendidos[i][1]
+                const unidades_Vendidas = listaDosProdutosVendidos[i][2]
+                
+                acessa_Database_Da_Loja.query(`SELECT * FROM produtos WHERE codigo_produto=${codigo_Do_Produto}`, (error, resultado) => {
+                    if(error){
+                        console.log(`Não foi possível remover as unidades dos produtos vendidos. Erro: ${error}`)
+                        res.send({msg:"Não foi possível remover do estoque os produtos vendidos!"})
+                    }else{
+                        var subtrai_Estoque = (resultado[0].estoque - unidades_Vendidas)
+                        console.log(`Nome do produto vendido: ${nome_Do_Produto_Vendido} Unidades vendidas: ${unidades_Vendidas}`)
+                        console.log(`Estoque do produto: ${resultado[0].estoque} Estoque substituído: ${subtrai_Estoque}`)
+                        acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${codigo_Do_Produto}`)
+                    }
+                })
+            }
+        }      
+    })
+    //FINAL DA PARTE EM TESTE ---------
+})
 
             /*
             //acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${resultado[0].codigo_produto}`)
@@ -393,10 +414,7 @@ app.post("/finalizar-venda", (req,res) => {
             }
             //FIM DO REMOVE AS UNIDADES VENDIDAS
             */
-        }      
-    })
-    //FINAL DA PARTE EM TESTE ---------
-})
+
 
 //SEPARA AS FUNÇÕES DO FINALIZAR VENDA:
 /*
