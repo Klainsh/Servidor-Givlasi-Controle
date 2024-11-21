@@ -307,7 +307,7 @@ async function criaDatabase_Vendas_Da_Loja(){
 //TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
 app.post("/finalizar-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
-    var listaDosProdutosVendidos = req.body.produtos_Vendidos;
+    const listaDosProdutosVendidos = req.body.produtos_Vendidos;
     //PARTE EM TESTE------------
     contador = 0;
     const acessa_Database_Vendas_Loja = mysql.createPool({
@@ -353,30 +353,14 @@ app.post("/finalizar-venda", (req,res) => {
                                                                 acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,   preco) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]})`, (erro) => {
                                                                     if(erro){
                                                                         console.log(`Erro ao tentar cadastrar os produtos ${erro}`)
-                                                                        res.send({msg:"Erro!"})
-                                                                    }else{
-                                                                        console.log("Produtos da venda foram inseridos com sucesso na tabela!")
-                                                                        res.send({msg:"Sucesso!"})
-                                                                        
                                                                     }
                                                                 })
-                                                            }                                                                                  
-                                                            //REMOVE AS UNIDADES DOS PRODUTOS QUE FORAM VENDIDOS.
-                                                            for(i = 0; i < listaDosProdutosVendidos.length; i ++){
-                                                                unidades_vendidas = listaDosProdutosVendidos[i][2];
-                                                                codigo_Do_Produto = listaDosProdutosVendidos[i][0]
-                                                                acessa_Database_Da_Loja.query(`SELECT estoque FROM produtos WHERE codigo_produto=${codigo_Do_Produto}`, (error, resultado) => {
-                                                                    if(error){
-                                                                        console.log('Não foi possível remover as unidades dos produtos vendidos.')
-                                                                        res.send({msg:"Não foi possível remover do estoque os produtos vendidos!"})
-                                                                    }else{
-                                                                        subtrai_Estoque = (resultado[0].estoque - unidades_vendidas)
-                                                                        console.log(subtrai_Estoque)
-                                                                        acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${codigo_Do_Produto}`)
-                                                                    }
-                                                                })
-                                                            }
-                                                            //FIM DO REMOVE AS UNIDADES VENDIDAS 
+                                                            }   
+                                                            //Fim da parte que insere os produtos da venda na tabela.  
+
+                                                            //REFAZER A PARTE QUE REMOVE OS PRODUTOS DO ESTOQUE!
+
+                                                            res.send({msg:"Sucesso!"})//Finalizou todo o processo.
                                                         }else{
                                                             res.send({msg:"Erro!"})
                                                         }
@@ -385,6 +369,9 @@ app.post("/finalizar-venda", (req,res) => {
             })
 
             /*
+            //acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${resultado[0].codigo_produto}`)
+
+
             //REMOVE AS UNIDADES DOS PRODUTOS QUE FORAM VENDIDOS.
             for(i = 0; i < listaDosProdutosVendidos.length; i ++){
                 unidades_vendidas = listaDosProdutosVendidos[i][2];
