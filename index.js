@@ -390,7 +390,6 @@ app.post("/finalizar-venda", (req,res) => {
     //FINAL DA PARTE EM TESTE ---------
 })
 
-
 app.post("/busca-Vendas-Do-Dia", (req,res) => {
     
     const id_da_loja = req.body.id_da_loja;
@@ -406,48 +405,41 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
             console.log("Erro")
             console.log({msg:"Erro"})
         }else{
-            
+            var listaDosProdutos = []
+            contador = 0
+            contador1 = 0
             if(result.length > 0){  //SE TIVER ALGUMA VENDA NO BANCO DE DADOS DA LOJA
-                var listaDosProdutos = []
+                
                 //Conta quantas tabelas de vendas tem na loja.
                 for(i = 0; i < result.length; i++){
                     const resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];//RETORNA EX: VENDA107012025
                     
-                    if(resultado.substr(-8) == dataSistema()){ //SE TIVER VENDA COM A DATA DE HOJE     
+                    if(resultado.substr(-8) == dataSistema()){ //SE TIVER VENDA COM A DATA DE HOJE    
+                        contador++
                         acessa_Database_Vendas_Loja.query(`SELECT * FROM ${resultado}`, (err, result2) => {
                             if(err){
                                 console.log("Erro")
-                            }else{                               
+                            }else{              
+                                contador1 ++                 
                                 for(a = 0; a < result2.length; a ++){
-                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco})                                              
-                                }
-                                console.log(listaDosProdutos)   
-                                
-                            }   
-                                                   
-                        }) 
+                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco})     
+                                    //listaDosProdutos.push(result2[a].produto)                                        
+                                }                                    
+                            }
+                            if(contador1 == contador){
+                                res.send(listaDosProdutos)
+                            }
+                                                              
+                        })
                     } 
-                                      
-                }  
-                //console.log("-------------------------------------------------------------------")
-                //console.log(listaDosProdutos) 
+                }               
             }else{
                 console.log("Nenhuma venda encontrada!")
                 res.send({msg:"Nenhuma venda encontrada!"})
-            }      
+            }     
         }
 
     })
-    
-    /*
-    //ENVIA PRO CLIENT O RESULTADO SE HÁ VENDAS NO DIA!
-    if(listaDosProdutos.length == 0){
-        console.log("Nenhuma venda realizada hoje!")
-        res.send({msg:"Nenhuma venda realizada hoje!"})
-    }else{
-        res.send(listaDosProdutos)
-    } 
-        */
 })
 
 
