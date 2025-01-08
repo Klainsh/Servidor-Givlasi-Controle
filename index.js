@@ -390,7 +390,9 @@ app.post("/finalizar-venda", (req,res) => {
     //FINAL DA PARTE EM TESTE ---------
 })
 
+
 app.post("/busca-Vendas-Do-Dia", (req,res) => {
+    
     const id_da_loja = req.body.id_da_loja;
     const acessa_Database_Vendas_Loja = mysql.createPool({
         host: "localhost",
@@ -398,43 +400,62 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
         password: "",
         database: `vendas_loja${id_da_loja}`,
     });
-
-    var listaDosProdutos = []
+    
     acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (error, result) => {
         if(error){
             console.log("Erro")
+            console.log({msg:"Erro"})
         }else{
-            if(result.length > 0){
+            
+            if(result.length > 0){  //SE TIVER ALGUMA VENDA NO BANCO DE DADOS DA LOJA
+                var listaDosProdutos = []
                 //Conta quantas tabelas de vendas tem na loja.
                 for(i = 0; i < result.length; i++){
-                    const resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];
+                    const resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];//RETORNA EX: VENDA107012025
                     
-                    if(resultado.substr(-8) == dataSistema()){    
-                        //console.log(resultado)              
+                    if(resultado.substr(-8) == dataSistema()){ //SE TIVER VENDA COM A DATA DE HOJE     
                         acessa_Database_Vendas_Loja.query(`SELECT * FROM ${resultado}`, (err, result2) => {
                             if(err){
                                 console.log("Erro")
-                            }else{
+                            }else{                               
                                 for(a = 0; a < result2.length; a ++){
-                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco})
-                                }       
-                            }                           
-                        })   
-                    }  
+                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco})                                              
+                                }
+                                console.log(listaDosProdutos)   
+                                
+                            }   
+                                                   
+                        }) 
+                    } 
+                                      
                 }  
+                //console.log("-------------------------------------------------------------------")
+                //console.log(listaDosProdutos) 
             }else{
-                res.send({msg:"Nenhúm resultado encontrado!"})
-            }
-                    
+                console.log("Nenhuma venda encontrada!")
+                res.send({msg:"Nenhuma venda encontrada!"})
+            }      
         }
+
     })
+    
+    /*
+    //ENVIA PRO CLIENT O RESULTADO SE HÁ VENDAS NO DIA!
+    if(listaDosProdutos.length == 0){
+        console.log("Nenhuma venda realizada hoje!")
+        res.send({msg:"Nenhuma venda realizada hoje!"})
+    }else{
+        res.send(listaDosProdutos)
+    } 
+        */
 })
 
 
 function dataSistema(){
     const date = new Date();
-    var data = (`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
-    //console.log(`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
+    //A data precisou ser tratada pois quando a data é exemplo: 07/01, ele não pega o 0, agora sim está correta! Não mude!
+    data = ('0'+date.getDate()).slice(-2) + ('0'+date.getMonth()+1).slice(-2) + (date.getFullYear())
+    //var data = (`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
     return data
 }
 
