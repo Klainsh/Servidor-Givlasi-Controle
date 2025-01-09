@@ -166,7 +166,7 @@ app.post("/buscar-produto", (req,res) => {
                 console.log(error)
             }else{
                 if(result.length > 0){
-                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },])  
+                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque, valor_de_compra: result[0].valor_de_compra},])  
                     //console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },)
                 }else{
                     res.send({msg:"Nenhum resultado encontrado!"})
@@ -186,7 +186,7 @@ app.post("/buscar-produto", (req,res) => {
                 if(result.length > 0){
                     for(r = 0; r < result.length; r++){  
                         //listaProdutos.push(result[r].produto)  //Adiciona cada resultado a listaProdutos
-                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque },)
+                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque, valor_de_compra: result[0].valor_de_compra},)
                     }
                     res.send(listaProdutos)  
                     //console.log(listaProdutos)
@@ -200,13 +200,13 @@ app.post("/buscar-produto", (req,res) => {
         loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
             if(error){
                 res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
-                console.log(error)
+                console.log(error) 
             }else{
                 //LISTA COM OS PRODUTOS ENCONTRADOS NO BANCO DE DADOS!
                 var listaProdutos = [];
                 if(result.length > 0){
                     for(r = 0; r < result.length; r++){
-                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque },)
+                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque, valor_de_compra: result[0].valor_de_compra},)
                     }    
                     res.send(listaProdutos)  
                     console.log(listaProdutos)
@@ -342,7 +342,8 @@ app.post("/finalizar-venda", (req,res) => {
                                                 cod_produto int not null,
                                                 produto varchar(41) not null,
                                                 unidades int not null,
-                                                preco float not null)Default charset=utf8;`, (erro) => {
+                                                preco float not null,
+                                                valor_de_compra float not null)Default charset=utf8;`, (erro) => {
                                                     if(erro){
                                                         console.log(`Erro ao tentar criar tabela da venda ERRO: ${erro}`)
                                                         res.send({msg:"Erro!"})
@@ -350,7 +351,7 @@ app.post("/finalizar-venda", (req,res) => {
                                                         //Parte que insere os produtos da venda na tabela.
                                                         if(listaDosProdutosVendidos.length != 0){
                                                             for(produtos = 0; produtos < listaDosProdutosVendidos.length; produtos ++){
-                                                                acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,   preco) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]})`, (erro) => {
+                                                                acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,preco,valor_de_compra) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]},'${listaDosProdutosVendidos[produtos][4]}')`, (erro) => {
                                                                     if(erro){
                                                                         console.log(`Erro ao tentar cadastrar os produtos ${erro}`)
                                                                     }
@@ -390,9 +391,9 @@ app.post("/finalizar-venda", (req,res) => {
     //FINAL DA PARTE EM TESTE ---------
 })
 
-app.post("/busca-Vendas-Do-Dia", (req,res) => {
-    
+app.post("/busca-Vendas-Do-Dia", (req,res) => { 
     const id_da_loja = req.body.id_da_loja;
+
     const acessa_Database_Vendas_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
@@ -422,17 +423,21 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
                             }else{              
                                 contador1 ++                 
                                 for(a = 0; a < result2.length; a ++){
-                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco})     
-                                    //listaDosProdutos.push(result2[a].produto)                                        
-                                }                                    
+                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco, valor_de_compra: result2[a].valor_de_compra})//ENVIANDO OS DADOS DA VENDA PARA A LISTA.                                             
+                                }                                
                             }
+                            //SE JÁ TIVER VERIFICADO TODAS AS VENDAS DO DIA, ENVIO AS INFORMAÇÕES PRO BANCO DE DADOS
+                            //EU NÃO SEI NEM PORQUE ESSA PORCARIA FUNCIONA, ATÉ PORQUE OS CONTADORES ACABAM TENDO VALORES IGUAIS A CADA LOOP, MAS SÓ FUNCIONA DESSE JEITO, ACREDITO QUE ESTOU PERDENDO DESEMPENHO, PORQUE ACABA "ENVIANDO" A CADA NOVO LOOP, MAS NÃO DÁ AQUELE ERRO DE JÁ TER ENVIADO AS INFORMAÇÕES, ENTENDI NADA, MAS TÁ FUNCIONANDO KKK
                             if(contador1 == contador){
-                                res.send(listaDosProdutos)
+                                res.send(listaDosProdutos)                              
                             }
                                                               
                         })
-                    } 
-                }               
+                    }
+                }  
+                if(contador == 0){//caso não tenha nenhuma venda na data de hoje no contador, ele retorna que não há venda
+                    res.send({msg:"Nenhuma venda realizada hoje!"})
+                }             
             }else{
                 console.log("Nenhuma venda encontrada!")
                 res.send({msg:"Nenhuma venda encontrada!"})
@@ -449,6 +454,31 @@ function dataSistema(){
     data = ('0'+date.getDate()).slice(-2) + ('0'+date.getMonth()+1).slice(-2) + (date.getFullYear())
     //var data = (`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
     return data
+}
+
+function calculaLucroDaData(itensVendidos,idDaLoja){
+    var lista_Atualizada_Com_O_Valor_De_Compra_Do_Produto = []
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${idDaLoja}`,//Nesse caso o nome do id da loja mudou porque estou passando o do parametro da função!
+    })
+
+    //FOR com a lista dos itens vendidos na data.
+    for(i = 0; i < itensVendidos.length; i++){
+        console.log(itensVendidos[i])
+        acessa_Database_Da_Loja.query(`SELECT * FROM produtos WHERE codigo_produto=${itensVendidos[i].codigoProduto}`, (err, result) =>{
+            if(err){
+                console.log("Erro ao tentar buscar produtos")
+            }else{
+                for(c = 0; c < result.length; c++){
+                    //console.log(result[c])
+                }
+            }
+        })
+    }
+    //return infos;
 }
 
 function criaNomeDaTabelaVendaPorData(){
