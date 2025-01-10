@@ -403,7 +403,7 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
     
     acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (error, result) => {
         if(error){
-            console.log("Erro")
+            console.log("Erro ao tentar: SHOW TABLES FROM vendas_loja" + error)
             console.log({msg:"Erro"})
         }else{
             var listaDosProdutos = []
@@ -447,6 +447,64 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
     })
 })
 
+//Essa função é a utilizada na tela faturamento e lucro
+app.post("/busca-Vendas-Por-Data", (req, res) =>{
+    const id_da_loja = req.body.id_da_loja;
+    const dataEscolhida = req.body.dataEscolhida;
+
+    if(dataEscolhida.length == 8){  
+        const acessa_Database_Vendas_Loja = mysql.createPool({
+            host: "localhost",
+            user: "root",
+            password: "",
+            database: `vendas_loja${id_da_loja}`,
+        });
+        
+        acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (error, result) => {
+            if(error){
+                console.log("Erro ao tentar: SHOW TABLES FROM vendas_loja" + error)
+                console.log({msg:"Erro"})
+            }else{
+                var listaDosProdutos = []
+                contador = 0
+                contador1 = 0
+                if(result.length > 0){  //SE TIVER ALGUMA VENDA NO BANCO DE DADOS DA LOJA
+                    
+                    //Conta quantas tabelas de vendas tem na loja.
+                    for(i = 0; i < result.length; i++){
+                        const resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];//RETORNA EX: VENDA107012025
+                        
+                        if(resultado.substr(-8) == dataEscolhida){ //SE TIVER VENDA COM A DATA DE HOJE    
+                            contador++
+                            acessa_Database_Vendas_Loja.query(`SELECT * FROM ${resultado}`, (err, result2) => {
+                                if(err){
+                                    console.log("Erro")
+                                }else{              
+                                    contador1 ++                 
+                                    for(a = 0; a < result2.length; a ++){
+                                        listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco, valor_de_compra: result2[a].valor_de_compra})//ENVIANDO OS DADOS DA VENDA PARA A LISTA.                                             
+                                    }                                
+                                }
+                                //SE JÁ TIVER VERIFICADO TODAS AS VENDAS DO DIA, ENVIO AS INFORMAÇÕES PRO BANCO DE DADOS
+                                //EU NÃO SEI NEM PORQUE ESSA PORCARIA FUNCIONA, ATÉ PORQUE OS CONTADORES ACABAM TENDO VALORES IGUAIS A CADA LOOP, MAS SÓ FUNCIONA DESSE JEITO, ACREDITO QUE ESTOU PERDENDO DESEMPENHO, PORQUE ACABA "ENVIANDO" A CADA NOVO LOOP, MAS NÃO DÁ AQUELE ERRO DE JÁ TER ENVIADO AS INFORMAÇÕES, ENTENDI NADA, MAS TÁ FUNCIONANDO KKK
+                                if(contador1 == contador){
+                                    res.send(listaDosProdutos)        
+                                }
+                                                                
+                            })
+                        }
+                    }  
+                    if(contador == 0){//caso não tenha nenhuma venda na data de hoje no contador, ele retorna que não há venda
+                        res.send({msg:"Nenhuma venda encontrada na data escolhida!"})
+                    }             
+                }else{
+                    console.log("Nenhuma venda encontrada!") 
+                    res.send({msg:"Nenhuma venda encontrada na data escolhida!"})
+                }     
+            }  
+        })
+    }  
+})
 
 function dataSistema(){
     const date = new Date();
@@ -456,30 +514,6 @@ function dataSistema(){
     return data
 }
 
-function calculaLucroDaData(itensVendidos,idDaLoja){
-    var lista_Atualizada_Com_O_Valor_De_Compra_Do_Produto = []
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: `loja${idDaLoja}`,//Nesse caso o nome do id da loja mudou porque estou passando o do parametro da função!
-    })
-
-    //FOR com a lista dos itens vendidos na data.
-    for(i = 0; i < itensVendidos.length; i++){
-        console.log(itensVendidos[i])
-        acessa_Database_Da_Loja.query(`SELECT * FROM produtos WHERE codigo_produto=${itensVendidos[i].codigoProduto}`, (err, result) =>{
-            if(err){
-                console.log("Erro ao tentar buscar produtos")
-            }else{
-                for(c = 0; c < result.length; c++){
-                    //console.log(result[c])
-                }
-            }
-        })
-    }
-    //return infos;
-}
 
 function criaNomeDaTabelaVendaPorData(){
     contador = 1;
