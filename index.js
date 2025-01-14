@@ -191,7 +191,7 @@ app.post("/buscar-produto", (req,res) => {
                     res.send(listaProdutos)  
                     //console.log(listaProdutos)
                 }else{
-                    console.log("Nenhúm resultado encontrado!")
+                    console.log("Nenhum resultado encontrado!")
                     res.send({msg:"Nenhum resultado encontrado!"})
                 }                  
             }
@@ -211,7 +211,7 @@ app.post("/buscar-produto", (req,res) => {
                     res.send(listaProdutos)  
                     console.log(listaProdutos)
                 }else{
-                    console.log("Nenhúm resultado encontrado!")
+                    console.log("Nenhum resultado encontrado!")
                     res.send({msg:"Nenhum resultado encontrado!"})
                 }       
             }
@@ -576,7 +576,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
                     for(i = 0; i < result.length; i++){
                         const resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];//RETORNA EX: VENDA107012025
                         
-                        if(resultado.substr(-4) == dataEscolhida){ //SE TIVER VENDA COM A DATA DE HOJE     
+                        if(resultado.substr(-4) == dataEscolhida){ //SE TIVER VENDA COM A DATA DE HOJE    
                             contador++
                             acessa_Database_Vendas_Loja.query(`SELECT * FROM ${resultado}`, (err, result2) => {
                                 if(err){
@@ -606,6 +606,29 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
             }  
         })
     }
+})
+
+app.post("/adicionar-estoque", (req, res) =>{
+    const id_da_loja = req.body.id_da_loja;
+    const codigoProduto = req.body.codigoProduto;
+    const novoEstoque = req.body.novoEstoque;
+
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    })
+
+    acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${novoEstoque} WHERE codigo_produto=${codigoProduto}`, (error) => {
+        if(error){
+            res.send("Erro!")
+            console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
+        }else{
+            res.send("Sucesso!")
+        }
+    })
+    
 })
 
 function dataSistema(){
