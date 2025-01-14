@@ -631,6 +631,29 @@ app.post("/adicionar-estoque", (req, res) =>{
     
 })
 
+app.post("/remover-estoque", (req, res) =>{
+    const id_da_loja = req.body.id_da_loja;
+    const codigoProduto = req.body.codigoProduto;
+    const novoEstoque = req.body.novoEstoque;
+
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    })
+
+    acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${novoEstoque} WHERE codigo_produto=${codigoProduto}`, (error) => {
+        if(error){
+            res.send("Erro!")
+            console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
+        }else{
+            res.send("Sucesso!")
+        }
+    })
+    
+})
+
 function dataSistema(){
     const date = new Date();
     //A data precisou ser tratada pois quando a data é exemplo: 07/01, ele não pega o 0, agora sim está correta! Não mude!
