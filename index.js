@@ -679,6 +679,43 @@ app.post("/busca-produtos", (req, res) =>{
     
 })
 
+//Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
+app.get('/planos', (req,res) => {
+    const planos = [["Plano Mensal", 43.78],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
+    res.send(planos)
+})
+
+app.get('/planos-assinatura', (req,res) => {
+    const planos = [
+        ["Plano Mensal", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084948dcc0101948ff4c3370137"],["Plano Semestral", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084948dcc01019494ed71b00387"],
+        ["Plano Anual", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084948dcc01019494f10471038a"]]
+    res.send(planos)
+})
+
+
+//Busco as informacoes do cliente para gerar o pix:
+app.post("/busca-dados-para-gerar-pix", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `usuarios`,
+    })
+
+    acessa_Database_Da_Loja.query(`SELECT * FROM contas_usuarios WHERE id_da_loja=${id_da_loja}`, (error, response) => {
+        if(error){
+            console.log(error)
+            res.send("Erro!")
+        }else{
+            const dados = [response[0].email, response[0].cpf]
+            res.send(dados)
+        }
+    })
+})
+
+
+
 function dataSistema(){
     const date = new Date();
     //A data precisou ser tratada pois quando a data é exemplo: 07/01, ele não pega o 0, agora sim está correta! Não mude!
@@ -725,6 +762,56 @@ function criaTableProdutos(){
                 }
             })
 }
+
+//OPÕES DE PAGAMENTOS ABAIXO:
+//Step 1: Import the parts of the module you want to use
+const {mercadoPagoConfig, Payment, default: MercadoPagoConfig} = require('mercadopago')
+//Step 2: Initialize the client object
+const client = new MercadoPagoConfig({
+    accessToken: 'APP_USR-300753015905114-011610-3682639e5deb58a5f4e2863582fc717f-534170914',
+    options: {timeout: 5000, idempotencyKey: 'abc'}
+})
+//Step 3: Initialize the API object
+const payment = new Payment(client)
+
+//Vou usar:
+const {v4: uuidv4} = require('uuid')
+
+app.post('/cria-pix', (req,res) => {
+    console.log("REQUEST")
+    console.log(req.body)
+
+    const body ={
+        transaction_amount: req.body.transaction_amount,
+        description: req.body.description,
+        payment_method_id: req.body.paymentMethodId,
+        payer:{
+            email: req.body.payer.email,
+            identification: {
+                type: req.body.payer.identification.identificationType,
+                number: req.body.payer.identification.number,
+            }
+        },
+    }
+    //Step 5: Create request options object- Optional
+    const requestOptions = { idempotencyKey: uuidv4() };
+
+    //Step 6: Make the request
+    //payment.create({ body, requestOptions }).then(console.log).catch(console.log);
+    payment.create({ body, requestOptions })
+    .then(response => {
+        console.log('Resultado da transação:', response);
+        res.send(response)
+    })
+    .catch(error => {
+        console.error('Erro ao criar pagamento:', error);
+    });
+    
+    
+})
+
+//FIM OPÇÕES DE PAGAMENTOS.
+
 
 app.listen(port, () => {
     console.log(`Servidor iniciado na porta: ${port}`)
