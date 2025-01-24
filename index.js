@@ -680,18 +680,32 @@ app.post("/busca-produtos", (req, res) =>{
 })
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
-app.get('/planos', (req,res) => {
-    const planos = [["Plano Mensal", 43.78],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
+app.get('/planos', (req,res) => {//Preço dos planos
+    const planos = [["Plano Mensal", 0.01],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
     res.send(planos)
 })
 
-app.get('/planos-assinatura', (req,res) => {
+app.get('/planos-assinatura', (req,res) => {//Links para assinar o plano
     const planos = [
         ["Plano Mensal", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084948dcc0101948ff4c3370137"],["Plano Semestral", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084948dcc01019494ed71b00387"],
         ["Plano Anual", "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=2c938084948dcc01019494f10471038a"]]
     res.send(planos)
 })
 
+app.get('/codigo-desconto', (req, res) => {
+    const codigoDesconto = ['GANHE20','GANHE100']
+})
+
+app.get('/verifica-pagamento-pix', (req,res) => {
+    payment.capture({
+        id: 99888935089,
+    }).then((response) => {
+        res.send(response)
+    }).catch((error) => {
+        res.send(error)
+    })
+
+})
 
 //Busco as informacoes do cliente para gerar o pix:
 app.post("/busca-dados-para-gerar-pix", (req,res) => {
