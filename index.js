@@ -815,12 +815,11 @@ app.post('/cria-pix', (req,res) => {
     payment.create({ body, requestOptions })
     .then(response => {
         console.log('Resultado da transação:', response);
-        res.send(response)
+        res.send(response)//Envio a resposta pro client para pegar o link do pix.
     })
     .catch(error => {
         console.error('Erro ao criar pagamento:', error);
     });
-    
     
 })
 
