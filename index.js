@@ -64,7 +64,6 @@ app.post('/pega-id-loja', (req, res) => {
 
 app.post("/cadastro", (req,res) => {
     email_global = req.body.email;//esse email aqui é global, para poder criar o BD da loja na hora que o usuario faz o cadastro.
-    const login = req.body.login;
     const senha = req.body.senha;
     const email = req.body.email;
     const nivel = req.body.nivel;
@@ -77,13 +76,13 @@ app.post("/cadastro", (req,res) => {
         }
         if(result.length == 0){
             bcrypt.hash(senha, saltRounds, (erro,hash) => {
-                db.query("INSERT INTO contas_usuarios(login,senha,email,nivel,cpf) VALUES (?,?,?,?,?)", [login,hash,email,nivel,cpf], (err,response) => {
+                db.query("INSERT INTO contas_usuarios(senha,email,nivel,cpf) VALUES (?,?,?,?)", [hash,email,nivel,cpf], (err,response) => {
                     if(err){
                         res.send(err);
+                    }else{//Modifiquei aqui, não tinha o else.   
+                        res.send({msg: "Cadastrado com sucesso!"});
+                        criaDatabaseDaLoja();//também já cria as tabelas necessárias.
                     }
-    
-                    res.send({msg: "Cadastrado com sucesso!"});
-                    criaDatabaseDaLoja();//também já cria as tabelas necessárias.
                 });
             })
         }else{
@@ -219,33 +218,6 @@ app.post("/buscar-produto", (req,res) => {
     }
 })
 
-/* AREA RESERVADA PARA SALVAR UMAS COISINHAS
-        loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
-            if(error){
-                console.log(error)
-            }else{
-                console.log(result[0].produto)
-            }
-        })
-        break;
-
-        loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
-            if(error){
-                console.log(error)
-            }else{
-                console.log(result[0].produto)         
-            }
-        })
-
-    //DO CLIENT:
-        //Lista os objetos retornados, exemplo: produto1, produto2, etc...
-        for(num=0; num < Object.keys(response.data).length; num++){
-            console.log(response.data[(num,num)].name) 
-
-        }
-
-*/
-
 async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
     db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
         if(error){
@@ -290,6 +262,14 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
                             })
                 }
             })
+
+            //INSERE O STATUS INICIAL DO PLANO DESBRAVADOR DA LOJA.
+            //Faço ele ao final, porque não interfere em nada no uso inicial do app cliente.
+            db.query(`INSERT INTO status_planos(id_da_loja,email,metodo_de_pagamento,status,descricao_do_plano,preco,data_de_inicio) values(?,?,?,?,?,?,?)`,[result[0].id_da_loja,result[0].email,"indefinido","ativo","desbravador",0.00,`${dataSistema()}`], (error) => {
+                if(error){
+                    console.log(`Erro ao tentar inserir o status_plano: ` + error)
+                }
+            })
         }
     })
 }
@@ -304,7 +284,36 @@ async function criaDatabase_Vendas_Da_Loja(){
     })
 }
 
-//TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
+//Essa tabela é onde vai constar o status do plano da loja.
+async function criaTabelaDePlanosDaLoja(id_da_loja,email){
+    const DB_Planos = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `planos`,//botar a database da loja.
+    })
+        //CRIA A TABELA DE PLANOS.
+        //Os tipos de 'metodo_de_pagamento são: assinatura/mensal
+        //Os status são: Ativo, Pendente, Atraso
+        DB_Planos.query(`CREATE TABLE IF NOT EXISTS loja${id_da_loja}(
+            id_da_loja INT NOT NULL,
+            email VARCHAR(100) NOT NULL,
+            metodo_de_pagamento VARCHAR(14) NOT NULL,
+            status varchar(9) NOT NULL,
+            descricao_do_plano VARCHAR(11) NOT NULL,
+            preco FLOAT NOT NULL,
+            PRIMARY KEY(id_da_loja)
+        )ENGINE=INNODB default charset = utf8;`,(erro) => {
+            if(erro){
+                console.log("Não foi possível criar a tabela de produtos!")
+                console.log(erro)
+            }else{
+                console.log("Table produtos criada com sucesso!")
+            }
+        })
+}
+
+//TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÇÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
 app.post("/finalizar-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const listaDosProdutosVendidos = req.body.produtos_Vendidos;
@@ -738,7 +747,6 @@ function dataSistema(){
     return data
 }
 
-
 function criaNomeDaTabelaVendaPorData(){
     contador = 1;
     const acessa_Database_Vendas_Loja = mysql.createPool({
@@ -775,6 +783,51 @@ function criaTableProdutos(){
                     console.log("Não foi possível criar a tabela de produtos!")
                 }
             })
+}
+
+function criaTablePixGerados(id_da_loja,id,status,description,transaction_amount, date_created,date_of_expiration){
+    const acessa_Database_PixGerados_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `pixgerados`,
+    });
+    //Ia fazer um verificador para ver se a loja já estava cadastrada, e se tivesse inserir, mas assim já funciona.
+    //Cria a tabela que vai ficar os dados da venda.
+    acessa_Database_PixGerados_Loja.query(`CREATE TABLE IF NOT EXISTS loja${id_da_loja}(
+        id_do_pix BIGINT NOT NULL,
+        status VARCHAR(20) NOT NULL,
+        description VARCHAR(30) NOT NULL,
+        transaction_amount FLOAT NOT NULL,
+        date_created CHAR(10) NOT NULL,
+        date_of_expiration CHAR(10) NOT NULL,
+        date_approved CHAR(10),
+        PRIMARY KEY(id_do_pix)
+    )ENGINE=INNODB default charset = utf8;`,(erro) => {
+        if(erro){
+            console.log("Não foi possível criar a tabela de pix!")
+            console.log(erro)
+        }else{
+            console.log("Table pix criada com sucesso!")
+            insere_ID_Do_Pix_Na_Tabela_Da_Loja(id_da_loja,id,status,description,transaction_amount,date_created,date_of_expiration);
+        }
+    })
+}
+
+function insere_ID_Do_Pix_Na_Tabela_Da_Loja(id_da_loja,id,status,description,transaction_amount,date_created,date_of_expiration){
+    const acessa_Database_PixGerados_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `pixgerados`,
+    });
+    acessa_Database_PixGerados_Loja.query(`INSERT INTO loja${id_da_loja}(id_do_pix,status,description,transaction_amount,date_created, date_of_expiration) VALUES(${id},"${status}","${description}",${transaction_amount}, "${date_created}", "${date_of_expiration}")`,(error, result) => {
+        if(error){
+            console.log(error)
+        }else{
+            console.log(result)
+        }
+    })
 }
 
 //OPÕES DE PAGAMENTOS ABAIXO:
@@ -816,6 +869,8 @@ app.post('/cria-pix', (req,res) => {
     .then(response => {
         console.log('Resultado da transação:', response);
         res.send(response)//Envio a resposta pro client para pegar o link do pix.
+        criaTablePixGerados(req.body.id_da_loja, response.id, response.status, response.description, response.transaction_amount, response.date_created, response.date_of_expiration)//Crio a tabela de pixGerados da loja caso ela não tenha e dentro de pixgerados insiro as informações que eu quero da "resposta do pix"
+        //Também nem tratei a data para enviar só os 10primeiros digitos. ele mesmo tratou, se futuramente der algum b.o já sei onde procurar.
     })
     .catch(error => {
         console.error('Erro ao criar pagamento:', error);
