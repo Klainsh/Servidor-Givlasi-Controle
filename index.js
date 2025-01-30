@@ -265,7 +265,10 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
 
             //INSERE O STATUS INICIAL DO PLANO DESBRAVADOR DA LOJA.
             //Faço ele ao final, porque não interfere em nada no uso inicial do app cliente.
-            db.query(`INSERT INTO status_planos(id_da_loja,email,metodo_de_pagamento,status,descricao_do_plano,preco,data_de_inicio) values(?,?,?,?,?,?,?)`,[result[0].id_da_loja,result[0].email,"indefinido","ativo","desbravador",0.00,`${dataSistema()}`], (error) => {
+            const dataFutura = calcularDataFutura(7)
+            const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
+            console.log(dataFuturaTratada)
+            db.query(`INSERT INTO status_planos(id_da_loja,email,metodo_de_pagamento,status,descricao_do_plano,preco,data_de_inicio,data_de_vencimento) values(?,?,?,?,?,?,?,?)`,[result[0].id_da_loja,result[0].email,"indefinido","ativo","desbravador",0.00,`${dataSistema()}`,`${dataFuturaTratada}`], (error) => {
                 if(error){
                     console.log(`Erro ao tentar inserir o status_plano: ` + error)
                 }
@@ -282,35 +285,6 @@ async function criaDatabase_Vendas_Da_Loja(){
             console.log("Database de vendas da loja criada com sucesso!")          
         }
     })
-}
-
-//Essa tabela é onde vai constar o status do plano da loja.
-async function criaTabelaDePlanosDaLoja(id_da_loja,email){
-    const DB_Planos = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "",
-        database: `planos`,//botar a database da loja.
-    })
-        //CRIA A TABELA DE PLANOS.
-        //Os tipos de 'metodo_de_pagamento são: assinatura/mensal
-        //Os status são: Ativo, Pendente, Atraso
-        DB_Planos.query(`CREATE TABLE IF NOT EXISTS loja${id_da_loja}(
-            id_da_loja INT NOT NULL,
-            email VARCHAR(100) NOT NULL,
-            metodo_de_pagamento VARCHAR(14) NOT NULL,
-            status varchar(9) NOT NULL,
-            descricao_do_plano VARCHAR(11) NOT NULL,
-            preco FLOAT NOT NULL,
-            PRIMARY KEY(id_da_loja)
-        )ENGINE=INNODB default charset = utf8;`,(erro) => {
-            if(erro){
-                console.log("Não foi possível criar a tabela de produtos!")
-                console.log(erro)
-            }else{
-                console.log("Table produtos criada com sucesso!")
-            }
-        })
 }
 
 //TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÇÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
@@ -701,6 +675,14 @@ app.get('/planos-assinatura', (req,res) => {//Links para assinar o plano
     res.send(planos)
 })
 
+app.get('/mensagens-para-clientes', (req,res) => {
+    const mensagens_gerais = ["Feliz ano novo!"]
+    const mensalidades = [
+        ["Seu plano está próximo do vencimento!"]
+        ["Seu plano venceu! para renovar, clique no botão abaixo!"]
+    ]
+})
+
 app.get('/codigo-desconto', (req, res) => {
     const codigoDesconto = ['GANHE20','GANHE100']
 })
@@ -737,6 +719,16 @@ app.post("/busca-dados-para-gerar-pix", (req,res) => {
     })
 })
 
+app.post("/busca_data_de_vencimento_mensalidade", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    db.query(`SELECT * FROM status_planos WHERE id_da_loja=${id_da_loja}`, (error, result) => {
+        if(error){
+            console.log("Erro no post 'busca_data_de_vencimento_mensalidade:'" + error)
+        }else{
+            res.send(result[0].data_de_vencimento)
+        }
+    })
+})
 
 
 function dataSistema(){
@@ -745,6 +737,21 @@ function dataSistema(){
     data = ('0'+date.getDate()).slice(-2) + ('0'+date.getMonth()+1).slice(-2) + (date.getFullYear())
     //var data = (`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
     return data
+}
+//Em algumas partes do sistema preciso inserir uma data somada ao sistema.
+function calcularDataFutura(dias){
+    const date = new Date();
+    //A data precisou ser tratada pois quando a data é exemplo: 07/01, ele não pega o 0, agora sim está correta! Não mude!
+    //Adiciona dias:
+    date.setDate(date.getDate() + dias)
+
+    return date;
+    /*Exemplo de uso:
+    const adicionar7Dias = 7;
+    const dataFutura = calcularDataFutura(adicionar7Dias)
+    console.log(dataFutura.toISOString().split('T')[0]) Formata a data para YYYY-MM-DD
+    */
+
 }
 
 function criaNomeDaTabelaVendaPorData(){
