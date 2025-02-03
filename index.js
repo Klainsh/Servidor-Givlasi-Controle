@@ -730,11 +730,10 @@ app.post("/busca_data_de_vencimento_mensalidade", (req,res) => {
     })
 })
 
-
 function dataSistema(){
     const date = new Date();
     //A data precisou ser tratada pois quando a data é exemplo: 07/01, ele não pega o 0, agora sim está correta! Não mude!
-    data = ('0'+date.getDate()).slice(-2) + ('0'+date.getMonth()+1).slice(-2) + (date.getFullYear())
+    data = ('0'+date.getDate()).slice(-2) + ('0'+(date.getMonth()+1)).slice(-2) + (date.getFullYear())
     //var data = (`${date.getDate()}${date.getMonth()+1}${date.getFullYear()}`)
     return data
 }
