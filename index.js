@@ -721,151 +721,205 @@ function resultadoDaMensalidade(dueDate){
 
 
 
+/*O inicial
 //Verifico os pagamentos pix da loja.
+    app.post('/verifica-pagamento-pix', (req,res) => {
+        const id_da_loja = req.body.id_da_loja;
+        verificaPagamentoPix(id_da_loja)
+    })
+*/
+//O testando coisas:
 app.post('/verifica-pagamento-pix', (req,res) => {
     const id_da_loja = req.body.id_da_loja;
-    
-    console.log(somaDataMensalidade("2025-02-05", 2))
+    var listaDePlanosPix = []
+    let contaPix = 0;  
+    let pagamentosAprovados = 0;
+    //verificaPagamentoPix(id_da_loja)
     dbPixGerados.query(`SELECT * FROM loja${id_da_loja}`, (error, result) => {
         if(error){
             console.log("Erro ao tentar selecionar * da function verifica-pagamento-pix: " + error)
             res.send("Error!")
         }else{
             if(result.length != 0){
-                var contaPagamentosAprovados = 0;
-                for(c = 0; c< result.length; c++){
+                for(c = 0; c < result.length; c++){
                     //Verifico os pix que ainda estão na data válida.
-                    if(resultadoDaMensalidade(result[c].date_of_expiration)){//PIX AINDA NÃO VENCEU, VERIFICO O PAGAMENTO DELE.   
-                        /*if(capturaPagamento(result[c].id_do_pix, id_da_loja)){//Verifico se o pix foi pago
-                            console.log(`Tem pagamento aprovado!${c}`)
-                        }else{
-                            console.log('Não tem pagamento aprovado!')
-                        }*/
-                        const id_do_pix = result[c].id_do_pix
-                        payment.capture({
-                            id:  id_do_pix,//Passo id do pix pro banco verificar pagamento.
-                        }).then((response) => {
-
+                    if(resultadoDaMensalidade(result[c].date_of_expiration)){//PIX AINDA NÃO VENCEU, VERIFICO O PAGAMENTO DELE.
+                        //capturaPagamento(result[c].id_do_pix, id_da_loja, result.length, result[c].description)//Verifico se o pix foi pago
+                        const id_do_pix = result[c].id_do_pix;
+                        const description = result[c].description;
+                        payment.capture({//Capturo o pagamento no mercadoPago
+                            id: id_do_pix,
+                        }).then((response) => {     
                             if(response.status == 'approved'){
                                 const date_approved_tratado = (response.date_approved.split('T')[0])           
                                 dbPixGerados.query(`UPDATE loja${id_da_loja} SET status='pago', date_approved='${date_approved_tratado}' WHERE id_do_pix=${id_do_pix}`, (error) => {
                                     if(error){
                                         console.log(error)
                                     }else{
-                                        console.log(`Pagamento aprovado do pix com id: ${id_do_pix}`) 
-                                        contaPagamentosAprovados++   
-                                        console.log(`Pagamentos aprovados: ${contaPagamentosAprovados}`)
-                                        //A ideia pro dia de amanhã é pegar a somatoria de pagamentos aprovados(De alguma forma) e fazer um for adicionando as mensalidades de alguma forma.                            
+                                        contaPix++ //Esse contador é para contar cada pix no banco de dados.
+                                        listaDePlanosPix.push(description)
+                                        console.log(`Pagamento aprovado para o pix com o id: ${id_do_pix}`)
+                                        pagamentosAprovados ++
+                                        if(contaPix == result.length){//Quando o contadorDePix for igual ao número de resultados pix no banco de dados, ai sim posso continuar a função
+                                            //Se o contador de pix verificados for igual a quantidade de pix encontrados na outra função
+                                            console.log(`conta: ${contaPix} resultados: ${result.length}`)
+                                            if(pagamentosAprovados > 0){
+                                                console.log(`Teve pagamentos aprovados: ${pagamentosAprovados}`)
+                                                res.send(`Teve pagamentos aprovados: ${pagamentosAprovados}`)
+                                            }else{
+                                                console.log(`Não teve pagamentos aprovados!`)
+                                                res.send(`Não teve pagamentos aprovados!`)
+                                            }
+                                            if(listaDePlanosPix.length != 0){
+                                                somaMensalidadesPlanos(listaDePlanosPix, id_da_loja)
+                                                //listaDePlanosPix.length = 0;//limpo a listaDePlanos
+                                                //contaPix = 0;//limpo o conta pix
+                                            }
+                                        }
                                     }
                                 })
                             }
+                    
                         }).catch((error) => {
                             if(error.status == 400){
+                                contaPix++//Esse contador é para contar cada pix no banco de dados.
                                 console.log(`Pagamento NÃO aprovado para o pix com o id: ${id_do_pix}`)
                             }else{
                                 console.log(error)
                             }
-                        })
-                    }else{
-                        //PIX JÁ VENCEU NÃO VERIFICO.
-                        console.log("pix já venceu!")
+                        })   
                     }
+                    //Se o pix já tiver vencido eu nem verifico.
                 }
-
             }else{
                 console.log(`Não tem nenhúm pix gerado pela loja:${id_da_loja}`)
-                res.send("Nenhum pix encontrado!")
-            }                  
+                res.send('Nenhum resultado encontrado!')
+            }                   
         }
     })
 })
 
+async function verificaPagamentoPix(id_da_loja) {
+    dbPixGerados.query(`SELECT * FROM loja${id_da_loja}`, (error, result) => {
+        if(error){
+            console.log("Erro ao tentar selecionar * da function verifica-pagamento-pix: " + error)
+            res.send("Error!")
+        }else{
+            if(result.length != 0){
+                for(c = 0; c < result.length; c++){
+                    //Verifico os pix que ainda estão na data válida.
+                    if(resultadoDaMensalidade(result[c].date_of_expiration)){//PIX AINDA NÃO VENCEU, VERIFICO O PAGAMENTO DELE.
+                        //o primeiro campo da func a baixo é o id do pix, o segundo o id da loja, e o terceiro é a quantidade de resultados de pix encontrados na loja, o quarto é a descricão do pix.
+                        capturaPagamento(result[c].id_do_pix, id_da_loja, result.length, result[c].description)//Verifico se o pix foi pago
+                    }
+                    //Se o pix já tiver vencido eu nem verifico.
+                }
+            }else{
+                console.log(`Não tem nenhúm pix gerado pela loja:${id_da_loja}`)
+            }                   
+        }
+    })
+}
+
 //Se o pagamento ainda não tiver sido feito, retorna o status 400 com a message: 'The action requested is not valid for the current payment state'
 //se tiver sido feito, ele retorna todo o json.
 //Caso aprovado: status: 'approved',
-function capturaPagamento(id, id_da_loja){
+var listaDePlanosPix = []  //Precisei colocar essas bostas fora da function, analisar depois se consigo modificar.
+let contaPix = 0;          //Precisei colocar essas bostas fora da function, analisar depois se consigo modificar.
+async function capturaPagamento(id, id_da_loja,contadorResultados,description){
     payment.capture({
         id:  id,
-    }).then((response) => {
+    }).then((response) => {     
         if(response.status == 'approved'){
             const date_approved_tratado = (response.date_approved.split('T')[0])           
             dbPixGerados.query(`UPDATE loja${id_da_loja} SET status='pago', date_approved='${date_approved_tratado}' WHERE id_do_pix=${id}`, (error) => {
                 if(error){
                     console.log(error)
                 }else{
-                    console.log(`Pagamento aprovado do pix com id: ${response.id}`)     
-                    return true;                             
+                    contaPix++ //Esse contador é para contar cada pix no banco de dados.
+                    listaDePlanosPix.push(description)
+                    console.log(`Pagamento aprovado para o pix com o id: ${id}`)
+                    if(contaPix == contadorResultados){//Quando o contadorDePix for igual ao número de resultados pix no banco de dados, ai sim posso continuar a função
+                        //Se o contador de pix verificados for igual a quantidade de pix encontrados na outra função
+                        console.log(`conta: ${contaPix} resultados: ${contadorResultados}`)
+                        if(listaDePlanosPix.length != 0){
+                            somaMensalidadesPlanos(listaDePlanosPix, id_da_loja)
+                            listaDePlanosPix.length = 0;//limpo a listaDePlanos
+                            contaPix = 0;//limpo o conta pix
+                        }
+                    }
                 }
             })
-            return true;
         }
+
     }).catch((error) => {
         if(error.status == 400){
+            contaPix++//Esse contador é para contar cada pix no banco de dados.
             console.log(`Pagamento NÃO aprovado para o pix com o id: ${id}`)
         }else{
             console.log(error)
         }
-    })
+    })    
+}
+
+//Função para somar as mensalidades, dos planos pagos pelo cliente via pix.
+async function somaMensalidadesPlanos(lista, id_da_loja){
+    let somaTempoDosPlanos = 0;
+    for(c = 0; c < lista.length; c++){
+        if(lista[c] == "pagamento-plano-mensal"){
+            somaTempoDosPlanos += 30
+        }else if(lista[c] == "pagamento-plano-semestral"){
+            somaTempoDosPlanos += 180
+        }else if(lista[c] == "pagamento-plano-anual"){
+            somaTempoDosPlanos += 365
+        }
+
+        if(c+1 == lista.length){//Se o for já tiver sido finalizado, ai sim insiro a nova data de vencimento na tabela.
+            console.log(`Soma das mensalidades encontradas: ${somaTempoDosPlanos}`)
+            insereNovaDataDeVencimento(somaTempoDosPlanos,id_da_loja)
+        }
+    }
 }
 
 async function insereNovaDataDeVencimento(novaData,id_da_loja){//Insere a nova data de vencimento do plano do cliente.
-    db.query(`UPDATE status_planos SET data_de_vencimento='${novaData}' WHERE id_da_loja=${id_da_loja}`, (error) => {
-        if(error){
-            console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
-            return false;
+    /* O novaData é quantos dias vai ser somada a data! 
+       *Porque se o cliente tiver com um plano ativo, a data da mensalidade vai ser
+       somada ao plano ativo dele, caso seja um plano inativo, a data da mensalidade
+       vai ser somada a data de aprovaçao do plano escolhido.
+    */ 
+
+    db.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
+        if(erro){
+            console.log(`Erro na função somaDataMensalidade: ${erro}`)
         }else{
-            return true;
+            if(resultadoDaMensalidade(result[0].data_de_vencimento)){//Se venceu é false, senão, verdadeira
+                const date1 = new Date(result[0].data_de_vencimento);
+                date1.setDate(date1.getDate() + novaData)
+                const dataFuturaTratada = (date1.toISOString().split('T')[0])
+
+                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
+                    if(error){
+                        console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
+                    }else{
+                        console.log('Nova data alterada com sucesso!')
+                    }
+                })
+            }else{
+                const date2 = new Date();
+                date2.setDate(date2.getDate() + novaData)
+                const dataFuturaTratada = (date2.toISOString().split('T')[0])
+                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
+                    if(error){
+                        console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
+                    }else{
+                        console.log('Nova data alterada com sucesso!')
+                    }
+                })
+            }
         }
     })
-}
 
-/*
-/*Verifico se a data do plano do cliente ainda está ativa ou se já tá vencida 
-                      * Se ainda tiver ativa, somo a nova data de vencimento a data ativa.
-                      * Se já tiver vencida, somo a nova data de vencimento a data de hoje.
-                    /
-db.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro, result) => {
-    if(erro){
-        console.log("Erro ao selecionar data de vencimento!")
-    }else{
-        if(resultadoDaMensalidade(result[0].data_de_vencimento)){//Caso ainda esteja ativo.
-            console.log("Plano do cliente ainda tá ativo.")                              
-            if(response.description.toLowerCase() == 'pagamento-plano-mensal'){
-                const dataFutura = somaDataMensalidade(result[0].data_de_vencimento, 30)//Somo +30dias ao plano já ativo.
-                const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
-                insereNovaDataDeVencimento(dataFuturaTratada,id_da_loja)
-                console.log(`Nova data do plano Mês: ${dataFuturaTratada}`)
-            }else if(response.description.toLowerCase() == 'pagamento-plano-semestral'){
-                const dataFutura = somaDataMensalidade(result[0].data_de_vencimento, 180)//Somo +180dias ao plano já ativo.
-                const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
-                insereNovaDataDeVencimento(dataFuturaTratada,id_da_loja)
-                console.log(`Nova data do plano Semestral: ${dataFuturaTratada}`)
-            }else if(response.description.toLowerCase() == 'pagamento-plano-anual'){
-                const dataFutura = somaDataMensalidade(result[0].data_de_vencimento, 365)//Somo +365dias ao plano já ativo.
-                const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
-                insereNovaDataDeVencimento(dataFuturaTratada,id_da_loja)
-                console.log(`Nova data do plano Ano: ${dataFuturaTratada}`)
-            }
-        }else{//Caso a data de vencimento do plano já esteja vencida.
-            //Da para melhorar essa função depois, para verificar se o ano é bissexto por exemplo
-            /*if(response.description.toLocaleLowerCase() == 'pagamento-plano-mensal'){
-                const dataFutura = calcularDataFutura(30)
-                const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
-                console.log(dataFuturaTratada)
-            }else if(response.description.toLowerCase() == 'pagamento-plano-semestral'){
-                const dataFutura = calcularDataFutura(180)
-                const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
-                console.log(dataFuturaTratada)
-            }else if(response.description.toLowerCase() == 'pagamento-plano-anual'){
-                const dataFutura = calcularDataFutura(365)
-                const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
-                console.log(dataFuturaTratada)
-            }/
-        console.log("Plano do cliente já venceu.")
-        } 
-    }                          
-}) 
-*/
+}
 
 //Busco as informacoes do cliente para gerar o pix:
 app.post("/busca-dados-para-gerar-pix", (req,res) => {
@@ -949,20 +1003,29 @@ function calcularDataFutura(dias){
 
 //No sistema, quando o usuario paga o pix, a data do pagamento deve somar a data da mensalidade ativa dele.
 //exemplo: a mensalidade dele vence mês 06, e ele pagou um plano de 6 meses, a soma deve ser feita apartir do mês 06.
-function somaDataMensalidade(data, dias){
-    const date = new Date(data);
-    //A data precisou ser tratada pois quando a data é exemplo: 07/01, ele não pega o 0, agora sim está correta! Não mude!
-    //Adiciona dias:
-    date.setDate(date.getDate() + dias)
-
-    return date;
-
+function somaDataMensalidade(dias, id_da_loja){
     /* O dias é quantos dias vai ser somada a data que foi recebida! 
        Porque se o cliente tiver com um plano ativo, a data da mensalidade vai ser
        somada ao plano ativo dele, caso seja um plano inativo, a data da mensalidade
        vai ser somada a data de aprovaçao do plano escolhido.
     */
     
+    const date = new Date();
+    date.setDate(date.getDate() + dias)
+
+    db.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
+        if(erro){
+            console.log(`Erro na funcao somaDataMensalidade: ${erro}`)
+        }else{
+            if(resultadoDaMensalidade(result[0].data_de_vencimento)){//Se venceu é false, senão, verdadeira
+                const date1 = new Date(result[0].data_de_vencimento);
+                date.setDate(date1.getDate() + dias)
+                return date1;
+            }else{
+                return date;
+            }
+        }
+    })
 }
 
 function criaNomeDaTabelaVendaPorData(){
