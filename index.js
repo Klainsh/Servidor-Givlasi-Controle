@@ -719,16 +719,6 @@ function resultadoDaMensalidade(dueDate){
     }
 }
 
-
-
-/*O inicial
-//Verifico os pagamentos pix da loja.
-    app.post('/verifica-pagamento-pix', (req,res) => {
-        const id_da_loja = req.body.id_da_loja;
-        verificaPagamentoPix(id_da_loja)
-    })
-*/
-//O testando coisas:
 app.post('/verifica-pagamento-pix', (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     var listaDePlanosPix = []
@@ -764,8 +754,8 @@ app.post('/verifica-pagamento-pix', (req,res) => {
                                             //Se o contador de pix verificados for igual a quantidade de pix encontrados na outra função
                                             console.log(`conta: ${contaPix} resultados: ${result.length}`)
                                             if(pagamentosAprovados > 0){
-                                                console.log(`Teve pagamentos aprovados: ${pagamentosAprovados}`)
-                                                res.send(`Teve pagamentos aprovados: ${pagamentosAprovados}`)
+                                                console.log(`Teve pagamentos aprovados`)
+                                                res.send(`Teve pagamentos aprovados`)
                                             }else{
                                                 console.log(`Não teve pagamentos aprovados!`)
                                                 res.send(`Não teve pagamentos aprovados!`)
@@ -793,7 +783,6 @@ app.post('/verifica-pagamento-pix', (req,res) => {
                 }
             }else{
                 console.log(`Não tem nenhúm pix gerado pela loja:${id_da_loja}`)
-                res.send('Nenhum resultado encontrado!')
             }                   
         }
     })
@@ -897,7 +886,7 @@ async function insereNovaDataDeVencimento(novaData,id_da_loja){//Insere a nova d
                 date1.setDate(date1.getDate() + novaData)
                 const dataFuturaTratada = (date1.toISOString().split('T')[0])
 
-                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
+                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', descricao_do_plano='${novaData}-dias', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
                     if(error){
                         console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
                     }else{
