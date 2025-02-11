@@ -670,8 +670,8 @@ app.post("/busca-produtos", (req, res) =>{
 })
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
-app.get('/planos', (req,res) => {//Preço dos planos
-    const planos = [["Plano Mensal", 0.01],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
+app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
+    const planos = [["Plano Mensal", 43.78],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
     res.send(planos)
 })
 
@@ -724,8 +724,8 @@ app.post('/verifica-pagamento-pix', (req,res) => {
     var listaDePlanosPix = []
     let contaPix = 0;  
     let pagamentosAprovados = 0;
-    //verificaPagamentoPix(id_da_loja)
-    dbPixGerados.query(`SELECT * FROM loja${id_da_loja}`, (error, result) => {
+    //USO O 'STATUS="PENDING"'  PARA VERIFICAR APENAS OS PIX QUE AINDA NÃO FORAM PAGOS.
+    dbPixGerados.query(`SELECT * FROM loja${id_da_loja} WHERE status='pending'`, (error, result) => {
         if(error){
             console.log("Erro ao tentar selecionar * da function verifica-pagamento-pix: " + error)
             res.send("Error!")
@@ -756,33 +756,52 @@ app.post('/verifica-pagamento-pix', (req,res) => {
                                             if(pagamentosAprovados > 0){
                                                 console.log(`Teve pagamentos aprovados`)
                                                 res.send(`Teve pagamentos aprovados`)
+                                                if(listaDePlanosPix.length != 0){ //Somo mensalidades dos pix pagos.
+                                                    somaMensalidadesPlanos(listaDePlanosPix, id_da_loja)
+                                                    //listaDePlanosPix.length = 0;//limpo a listaDePlanos
+                                                    //contaPix = 0;//limpo o conta pix
+                                                }
                                             }else{
                                                 console.log(`Não teve pagamentos aprovados!`)
                                                 res.send(`Não teve pagamentos aprovados!`)
                                             }
-                                            if(listaDePlanosPix.length != 0){
-                                                somaMensalidadesPlanos(listaDePlanosPix, id_da_loja)
-                                                //listaDePlanosPix.length = 0;//limpo a listaDePlanos
-                                                //contaPix = 0;//limpo o conta pix
-                                            }
+                                            
                                         }
                                     }
                                 })
                             }
                     
                         }).catch((error) => {
-                            if(error.status == 400){
+                            if(error.status == 400){//PIX PAGOS OU NÃO APROVADOS NÃO CONTAM.
                                 contaPix++//Esse contador é para contar cada pix no banco de dados.
                                 console.log(`Pagamento NÃO aprovado para o pix com o id: ${id_do_pix}`)
+                                if(contaPix == result.length){//Quando o contadorDePix for igual ao número de resultados pix no banco de dados, ai sim posso continuar a função
+                                    //Se o contador de pix verificados for igual a quantidade de pix encontrados na outra função
+                                    console.log(`conta: ${contaPix} resultados: ${result.length}`)
+                                    if(pagamentosAprovados > 0){
+                                        console.log(`Teve pagamentos aprovados`)
+                                        res.send(`Teve pagamentos aprovados`)
+                                    }else{
+                                        console.log(`Não teve pagamentos aprovados!`)
+                                        res.send(`Não teve pagamentos aprovados!`)
+                                    }
+                                }
                             }else{
                                 console.log(error)
                             }
                         })   
+                    }else{
+                        contaPix++
+                        if(contaPix == result.length){
+                            console.log(`Nenhum pix ativo!`)
+                            res.send('Nenhum pix ativo!')
+                        }                       
                     }
                     //Se o pix já tiver vencido eu nem verifico.
                 }
             }else{
                 console.log(`Não tem nenhúm pix gerado pela loja:${id_da_loja}`)
+                res.send("Nenhum pix gerado pela loja.")
             }                   
         }
     })
@@ -886,7 +905,7 @@ async function insereNovaDataDeVencimento(novaData,id_da_loja){//Insere a nova d
                 date1.setDate(date1.getDate() + novaData)
                 const dataFuturaTratada = (date1.toISOString().split('T')[0])
 
-                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', descricao_do_plano='${novaData}-dias', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
+                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', descricao_do_plano='${novaData} dias', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
                     if(error){
                         console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
                     }else{
