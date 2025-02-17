@@ -670,8 +670,8 @@ app.post("/busca-produtos", (req, res) =>{
 })
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
-app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
-    const planos = [["Plano Mensal", 43.78],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
+app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290 
+    const planos = [["Plano Mensal", 43.15],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
     res.send(planos)
 })
 
