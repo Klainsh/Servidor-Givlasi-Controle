@@ -544,7 +544,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
                 }     
             }  
         })
-    }else if(dataEscolhida.length == 4){//Quando a busca é feita buscando apenas pelo ano
+    }else if(dataEscolhida.length == 4){//Quando a busca é feita buscando apenas pelo ano 
         const acessa_Database_Vendas_Loja = mysql.createPool({
             host: "localhost",
             user: "root",
@@ -644,6 +644,29 @@ app.post("/remover-estoque", (req, res) =>{
     
 })
 
+app.post("/alterar-valor-compra-e-venda", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const codigoProduto = req.body.codigo_produto;
+    const novoValorDeCompra = req.body.novoValorDeCompra;
+    const novoValorDeVenda = req.body.novoValorDeVenda;
+
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    })
+
+    acessa_Database_Da_Loja.query(`UPDATE produtos SET valor_de_compra=${novoValorDeCompra}, valor_de_venda=${novoValorDeVenda} WHERE codigo_produto=${codigoProduto}`, (error) =>{
+        if(error){
+            res.send("Erro!")
+            console.log(`Erro ao tentar alterar valor de compra e venda. Erro: ${error}`)
+        }else{
+            res.send("Sucesso!")
+        }
+    })
+})
+
 app.post("/busca-produtos", (req, res) =>{
     const id_da_loja = req.body.id_da_loja;
     listaDosProdutos = []
@@ -670,7 +693,7 @@ app.post("/busca-produtos", (req, res) =>{
 })
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
-app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290 
+app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
     const planos = [["Plano Mensal", 43.15],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
     res.send(planos)
 })
