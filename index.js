@@ -692,6 +692,142 @@ app.post("/busca-produtos", (req, res) =>{
     
 })
 
+//PARTE DA COMANDA
+app.post("/cria-nova-comanda", (req, res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const novaComanda = req.body.novaComanda;
+
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    })
+
+    acessa_Database_Da_Loja.query(`CREATE TABLE IF NOT EXISTS mesa_${novaComanda}(
+        cod_produto INT NOT NULL,
+        produto VARCHAR(100) NOT NULL,
+        unidades INT NOT NULL,
+        preco float NOT NULL
+        )ENGINE=INNODB default charset = utf8;`,(err) => {
+        if(err){
+            console.log("Não foi possível criar a tabela de produtos!")
+        }else{
+            res.send("Sucesso!")
+        }
+    })
+})
+
+app.post("/buscar-comandas-abertas", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const novaComanda = req.body.novaComanda;
+
+    const loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    });
+
+    loja.query(`SHOW TABLES`, (error, result) => {
+        if(error){
+            console.log(error)
+        }else{
+            if(result.length > 0){
+                let lista_De_Comandas = ["ESCOLHA UMA COMANDA"]
+                for(let i = 0; i< result.length; i++){
+                    //console.log(result[i].Tables_in_loja139)
+                    const nome_tabela = result[i].Tables_in_loja139
+                    if(nome_tabela.substr(0,4) == 'mesa'){//Pego só as tabelas que começam com mesa
+                        lista_De_Comandas.push(nome_tabela)
+                    }
+                }
+                res.send(lista_De_Comandas)
+            }else{
+                console.log("Não tem nenhuma comanda aberta.")
+            }
+
+        }
+    })
+
+})
+
+app.post("/insere-itens-da-comanda", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const comanda = req.body.comanda;
+    const lista_da_comanda = req.body.lista_da_comanda;
+
+    const loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    });
+
+    //Primeiro excluo os itens que já estão na tabela, para depois inserir os novos itens da comanda.
+    loja.query(`DELETE FROM ${comanda}`, (error) => {
+        if(error){
+            console.log(`Erro ao excluir itens da comanda: ${error}`)
+        }else{//pego cada um dos itens da comanda, e insiro na tabela da comanda.
+            for(let i = 0; i < lista_da_comanda.length; i++){//Separo cada parte do item na array.
+                cod_Produto = lista_da_comanda[i][0]
+                produto = lista_da_comanda[i][1]
+                unidades = lista_da_comanda[i][2]
+                preco = lista_da_comanda[i][3]
+
+                loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(${cod_Produto},'${produto}',${unidades},${preco})`, (error) => {
+                    if(error){
+                        console.log(`Erro no insere-itens-da-comanda: ${error}`)
+                    }
+                })
+            }
+        }
+    })
+
+
+    //console.log(`lista da comanda: ${comanda}`)
+ 
+    //loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(cod_produto,produto,unidades,preco)`)
+})
+
+app.post("/buscar-itens-comanda", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const comanda = req.body.comanda;
+
+    const loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    });
+
+    let itensNaComanda = []
+
+    loja.query(`SELECT * FROM ${comanda}`,(error, result) => {
+        if(error){
+            console.log(error)
+        }else{
+            if(result.length > 0){//Caso tenha itens na comanda selecionada.
+                for(let i = 0; i< result.length; i++){
+                    cod_Produto = result[i].cod_produto
+                    produto = result[i].produto
+                    unidades = result[i].unidades
+                    preco = result[i].preco
+
+                    itensNaComanda.push([cod_Produto,produto,unidades,preco])
+                }
+                
+                res.send(itensNaComanda)
+            }else{
+                res.send("Nenhum resultado")
+            }
+            //console.log(result)
+        }
+    })
+})
+
+//FIM PARTE DA COMANDA
+
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
 app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
     const planos = [["Plano Mensal", 43.15],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
