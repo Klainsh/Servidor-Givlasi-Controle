@@ -756,7 +756,6 @@ app.post("/insere-itens-da-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const comanda = req.body.comanda;
     const lista_da_comanda = req.body.lista_da_comanda;
-
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
@@ -781,6 +780,8 @@ app.post("/insere-itens-da-comanda", (req,res) => {
                     }
                 })
             }
+            console.log(`inseri os itens na comanda.`)
+            res.send(`Produtos salvos na comanda:${comanda}`) 
         }
     })
 
@@ -793,7 +794,7 @@ app.post("/insere-itens-da-comanda", (req,res) => {
 app.post("/buscar-itens-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const comanda = req.body.comanda;
-
+    console.log(`buscou itens da comanda.`)
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
@@ -816,7 +817,7 @@ app.post("/buscar-itens-comanda", (req,res) => {
 
                     itensNaComanda.push([cod_Produto,produto,unidades,preco])
                 }
-                
+
                 res.send(itensNaComanda)
             }else{
                 res.send("Nenhum resultado")
