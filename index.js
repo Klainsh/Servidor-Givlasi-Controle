@@ -307,6 +307,7 @@ app.post("/finalizar-venda", (req,res) => {
         database: `vendas_loja${id_da_loja}`,
     });
 
+     
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
@@ -718,6 +719,26 @@ app.post("/cria-nova-comanda", (req, res) => {
     })
 })
 
+app.post("/excluir-comanda", (req, res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const comanda = req.body.comanda;
+
+    const acessa_Database_Da_Loja = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "",
+        database: `loja${id_da_loja}`,
+    })
+
+    acessa_Database_Da_Loja.query(`DROP TABLE ${comanda}`, (error) => {
+        if(error){
+            res.send(error)
+        }else{
+            res.send("Sucesso!")
+        }
+    })
+})
+
 app.post("/buscar-comandas-abertas", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const novaComanda = req.body.novaComanda;
@@ -773,7 +794,7 @@ app.post("/insere-itens-da-comanda", (req,res) => {
                 produto = lista_da_comanda[i][1]
                 unidades = lista_da_comanda[i][2]
                 preco = lista_da_comanda[i][3]
-
+            
                 loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(${cod_Produto},'${produto}',${unidades},${preco})`, (error) => {
                     if(error){
                         console.log(`Erro no insere-itens-da-comanda: ${error}`)
