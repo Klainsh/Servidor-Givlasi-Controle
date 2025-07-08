@@ -32,6 +32,10 @@ const dbPixGerados = mysql.createPool({
 app.use(express.json());
 app.use(cors());
 
+app.get("/teste", (req,res) => {
+    res.send("teste")
+})
+
 app.post("/login", (req,res) => {
     const email = req.body.email;
     const senha = req.body.senha;
