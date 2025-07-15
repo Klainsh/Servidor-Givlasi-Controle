@@ -8,24 +8,24 @@ const saltRounds = 10;
 
 var email_global = '';
 var id_Da_Loja_Global ='';
-
+    
 const db = mysql.createPool({
     host: "localhost",
     user: "root",
-    password: "",
+    password: "123456",
     database: "usuarios",
 });
 
 const db0 = mysql.createPool({
     host: "localhost",
     user: "root",
-    password: "",
+    password: "123456",
 });
 
 const dbPixGerados = mysql.createPool({
     host: "localhost",
     user: "root",
-    password: "",
+    password: "123456",
     database: "pixgerados",
 });
 
@@ -35,7 +35,7 @@ app.use(cors());
 app.get("/teste", (req,res) => {
     res.send("teste")
 })
-
+ 
 app.post("/login", (req,res) => {
     const email = req.body.email;
     const senha = req.body.senha;
@@ -71,6 +71,47 @@ app.post('/pega-id-loja', (req, res) => {
             res.send(result[0])
         }
     })
+})
+
+app.post("/testeCadastro", (req, res) => {
+    email_global = req.body.email;//esse email aqui é global, para poder criar o BD da loja na hora que o usuario faz o cadastro.
+    const senha = req.body.senha;
+    const email = req.body.email;
+    const nivel = req.body.nivel;
+    const cpf = req.body.cpf;
+
+    console.log(`${email} | ${senha} | ${nivel} | ${cpf}`)
+
+    db.query("SELECT * FROM status_planos", (error, result) => {
+        if(error){
+            console.log(`Erro ao consultar: ${error}`)
+        }else{
+            for(i = 0; i < result.length; i++){
+                console.log(result[i])
+            }
+        }
+    })
+    
+    /*db.query("SELECT * FROM contas_usuarios WHERE email=?", [email], (err,result) => {
+        if(err){
+            res.send(err);
+        }
+        else if(result.length == 0){
+            bcrypt.hash(senha, saltRounds, (erro,hash) => {
+                db.query("INSERT INTO contas_usuarios(senha,email,nivel,cpf) VALUES (?,?,?,?)", [hash,email,nivel,cpf], (err,response) => {
+                    if(err){
+                        res.send(err);
+                    }else{//Modifiquei aqui, não tinha o else.   
+                        res.send({msg: "Cadastrado com sucesso!"});
+                        criaDatabaseDaLoja();//também já cria as tabelas necessárias.
+                    }
+                });
+            })
+        }else{
+            res.send({msg: "Já existe uma conta cadastrada com este email!"});
+        }       
+    });//PARA VALIDAR SE JÁ TEM ALGUM EMAIL IGUAL CADASTRADO NO BD*/
+
 })
 
 app.post("/cadastro", (req,res) => {
@@ -119,7 +160,7 @@ app.post("/cadastrar-produto", (req,res) => {
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     });
 
@@ -150,7 +191,7 @@ app.post("/buscar-produto", (req,res) => {
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     });
 
@@ -246,7 +287,7 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
                     const loja1 = mysql.createPool({
                         host: "localhost",
                         user: "root",
-                        password: "",
+                        password: "123456",
                         database: `loja${result[0].id_da_loja}`,//botar a database da loja.
                     })
                     
@@ -258,9 +299,9 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
                                 estoque INT(11) NOT NULL,
                                 valor_de_compra FLOAT NOT NULL,
                                 valor_de_venda FLOAT NOT NULL,
-                                sobre_o_produto FLOAT NOT NULL,
-                                sobre_a_venda FLOAT NOT NULL,
-                                lucro FLOAT NOT NULL,
+                                sobre_o_produto FLOAT NULL,
+                                sobre_a_venda FLOAT NULL,
+                                lucro FLOAT NULL,
                                 local_armazenamento VARCHAR(50) NULL,
                                 PRIMARY KEY(codigo_produto)
                             )ENGINE=INNODB default charset = utf8;`,(erro) => {
@@ -307,7 +348,7 @@ app.post("/finalizar-venda", (req,res) => {
     const acessa_Database_Vendas_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `vendas_loja${id_da_loja}`,
     });
 
@@ -315,7 +356,7 @@ app.post("/finalizar-venda", (req,res) => {
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
     acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (err,result) => {
@@ -392,7 +433,7 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
     const acessa_Database_Vendas_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `vendas_loja${id_da_loja}`,
     });
     
@@ -451,7 +492,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
         const acessa_Database_Vendas_Loja = mysql.createPool({
             host: "localhost",
             user: "root",
-            password: "",
+            password: "123456",
             database: `vendas_loja${id_da_loja}`,
         });
         
@@ -502,7 +543,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
         const acessa_Database_Vendas_Loja = mysql.createPool({
             host: "localhost",
             user: "root",
-            password: "",
+            password: "123456",
             database: `vendas_loja${id_da_loja}`,
         }); 
         
@@ -553,7 +594,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
         const acessa_Database_Vendas_Loja = mysql.createPool({
             host: "localhost",
             user: "root",
-            password: "",
+            password: "123456",
             database: `vendas_loja${id_da_loja}`,
         }); 
         
@@ -611,7 +652,7 @@ app.post("/adicionar-estoque", (req, res) =>{
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
 
@@ -634,7 +675,7 @@ app.post("/remover-estoque", (req, res) =>{
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
 
@@ -658,7 +699,7 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
 
@@ -679,7 +720,7 @@ app.post("/busca-produtos", (req, res) =>{
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
 
@@ -705,7 +746,7 @@ app.post("/cria-nova-comanda", (req, res) => {
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
 
@@ -730,7 +771,7 @@ app.post("/excluir-comanda", (req, res) => {
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     })
 
@@ -750,7 +791,7 @@ app.post("/buscar-comandas-abertas", (req,res) => {
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     });
 
@@ -784,7 +825,7 @@ app.post("/insere-itens-da-comanda", (req,res) => {
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     });
 
@@ -823,7 +864,7 @@ app.post("/buscar-itens-comanda", (req,res) => {
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `loja${id_da_loja}`,
     });
 
@@ -1120,7 +1161,7 @@ app.post("/busca-dados-para-gerar-pix", (req,res) => {
     const acessa_Database_Da_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `usuarios`,
     })
 
@@ -1226,7 +1267,7 @@ function criaNomeDaTabelaVendaPorData(){
     const acessa_Database_Vendas_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `vendas_loja${id_da_loja}`,
     });
     acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (err,result) => {
@@ -1247,9 +1288,9 @@ function criaTableProdutos(){
                 estoque INT(11) NOT NULL,
                 valor_de_compra FLOAT NOT NULL,
                 valor_de_venda FLOAT NOT NULL,
-                sobre_o_produto FLOAT NOT NULL,
-                sobre_a_venda FLOAT NOT NULL,
-                lucro FLOAT NOT NULL,
+                sobre_o_produto FLOAT NULL,
+                sobre_a_venda FLOAT NULL,
+                lucro FLOAT NULL,
                 local_armazenamento VARCHAR(50) NULL,
                 PRIMARY KEY(codigo_produto)
             )ENGINE=INNODB default charset = utf8;`,(err) => {
@@ -1263,7 +1304,7 @@ function criaTablePixGerados(id_da_loja,id,status,description,transaction_amount
     const acessa_Database_PixGerados_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `pixgerados`,
     });
     //Ia fazer um verificador para ver se a loja já estava cadastrada, e se tivesse inserir, mas assim já funciona.
@@ -1292,10 +1333,16 @@ function insere_ID_Do_Pix_Na_Tabela_Da_Loja(id_da_loja,id,status,description,tra
     const acessa_Database_PixGerados_Loja = mysql.createPool({
         host: "localhost",
         user: "root",
-        password: "",
+        password: "123456",
         database: `pixgerados`,
     });
-    acessa_Database_PixGerados_Loja.query(`INSERT INTO loja${id_da_loja}(id_do_pix,status,description,transaction_amount,date_created, date_of_expiration) VALUES(${id},"${status}","${description}",${transaction_amount}, "${date_created}", "${date_of_expiration}")`,(error, result) => {
+
+    let trata_date_created = date_created.slice(0, 10);
+    let trata_date_expiration = date_of_expiration.slice(0,10);
+
+    /*Na query abaixo, troquei o date_created por: trata_date_created, e troquei o date_of_expiration por: trata_date_expiration */
+
+    acessa_Database_PixGerados_Loja.query(`INSERT INTO loja${id_da_loja}(id_do_pix,status,description,transaction_amount,date_created, date_of_expiration) VALUES(${id},"${status}","${description}",${transaction_amount}, "${trata_date_created}", "${trata_date_expiration}")`,(error, result) => {
         if(error){
             console.log(error)
         }else{
