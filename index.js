@@ -803,7 +803,8 @@ app.post("/buscar-comandas-abertas", (req,res) => {
                 let lista_De_Comandas = ["ESCOLHA UMA COMANDA"]
                 for(let i = 0; i< result.length; i++){
                     //console.log(result[i].Tables_in_loja139)
-                    const nome_tabela = result[i].Tables_in_loja139
+                    const nome_tabela = result[i][`Tables_in_loja${id_da_loja}`]
+                    //console.log(`RESULT TESTE: ${result[i][`Tables_in_loja${id_da_loja}`]}`)
                     if(nome_tabela.substr(0,4) == 'mesa'){//Pego só as tabelas que começam com mesa
                         lista_De_Comandas.push(nome_tabela)
                     }
@@ -897,7 +898,7 @@ app.post("/buscar-itens-comanda", (req,res) => {
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
 app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
-    const planos = [["Plano Mensal", 43.15],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
+    const planos = [["Plano Mensal", 0.10],["Plano Semestral", 156.15],["Plano Anual", 290.00]]
     res.send(planos)
 })
 
