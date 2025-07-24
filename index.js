@@ -10,7 +10,7 @@ var email_global = '';
 var id_Da_Loja_Global ='';
     
 const db = mysql.createPool({
-    host: "localhost",
+    host: "http://18.230.108.151:3000/",
     user: "root",
     password: "123456",
     database: "usuarios",
