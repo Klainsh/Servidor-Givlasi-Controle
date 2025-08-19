@@ -10,7 +10,7 @@ var email_global = '';
 var id_Da_Loja_Global ='';
     
 const db = mysql.createPool({
-    host: "http://18.230.108.151:3000/",
+    host: "localhost",
     user: "root",
     password: "123456",
     database: "usuarios",
@@ -39,7 +39,7 @@ app.get("/teste", (req,res) => {
 app.post("/login", (req,res) => {
     const email = req.body.email;
     const senha = req.body.senha;
-
+    console.log("chegou aqui")
     db.query("SELECT * FROM contas_usuarios WHERE email = ?",[email] ,(err, result) => {
         if(err){
             res.send(err)
