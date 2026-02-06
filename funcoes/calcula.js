@@ -1,0 +1,1 @@
+//Aqui vai ficar todas as funcoes de calculos.

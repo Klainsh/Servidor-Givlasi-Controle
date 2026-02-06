@@ -143,35 +143,35 @@ app.post("/cadastro", (req,res) => {
     });//PARA VALIDAR SE JÁ TEM ALGUM EMAIL IGUAL CADASTRADO NO BD
 });
 
+//NOVA FUNCAO REFATORADA!
 app.post("/cadastrar-produto", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+
     const codigo_produto = req.body.codigo_produto;
     const produto = req.body.produto;
     const tamanho_produto = req.body.tamanho_produto;
     const estoque = req.body.estoque;
-    const valor_de_compra = req.body.valor_de_compra;
-    const valor_de_venda = req.body.valor_de_venda;
-    const sobre_o_produto = req.body.sobre_o_produto;
-    const sobre_a_venda = req.body.sobre_a_venda;
-    const lucro = req.body.lucro;
+    const preco_compra = req.body.valor_de_compra;
+    const preco_venda = req.body.valor_de_venda;
     const local_armazenamento = req.body.local_armazenamento;
-    const id_da_loja = req.body.id_da_loja;
+
     console.log(id_da_loja);
 
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
         password: "123456",
-        database: `loja${id_da_loja}`,
+        database: `lojas`,
     });
 
-    loja.query(`SELECT codigo_produto FROM produtos WHERE codigo_produto=${codigo_produto}`,(error, result) => {
+    loja.query(`SELECT codigo_produto FROM produtos WHERE loja_id = ? AND codigo_produto = ?`, [id_da_loja, codigo_produto] ,(error, result) => {
         if(error){
             console.log(`Erro: ${error}`)
             res.send({msg:"Erro"})
         }if(result.length > 0){
             res.send({msg:"Já existe um produto cadastrado com esse código!"})
         }else{
-            loja.query("INSERT INTO produtos(codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento) VALUES (?,?,?,?,?,?,?,?,?,?)",[codigo_produto, produto, tamanho_produto, estoque, valor_de_compra, valor_de_venda, sobre_o_produto, sobre_a_venda, lucro, local_armazenamento],(error) => {
+            loja.query("INSERT INTO produtos(loja_id, codigo_produto, nome, tamanho, estoque, preco_compra, preco_venda, local_armazenamento) VALUES (?,?,?,?,?,?,?,?)",[id_da_loja, codigo_produto, produto, tamanho_produto, estoque, preco_compra, preco_venda, local_armazenamento],(error) => {
                 if(error){
                     console.log("Ocorreu um erro ao tentar cadastrar o produto.")
                     console.log(error)
@@ -185,39 +185,27 @@ app.post("/cadastrar-produto", (req,res) => {
     })
 })
 
+//NOVA FUNCAO REFATORADA!
 app.post("/buscar-produto", (req,res) => {
     const codigoProduto = req.body.codigoProduto;
     const id_da_loja = req.body.id_da_loja;
+    const buscaPeloCodigo = req.body.modoDeBusca;//INFORMA SE O SERVIDOR DEVE BUSCAR PELO CÓDIGO OU PELO NOME DO PRODUTO.
     const loja = mysql.createPool({
         host: "localhost",
         user: "root",
         password: "123456",
-        database: `loja${id_da_loja}`,
+        database: `lojas`,
     });
-
-    //Código para verificar os caracteres da lista
-    var lista = [1,2,3,4,5,6,7,8,9,0] 
-    contaNumeros = 0 //faz a contagem para verificar quantos números tem no código que o usuario enviou!
-    //vALIDA CARACTERES
-    //Verifica se tem números no código enviado, se tiver ele conta quantos tem!
-    for(n = 0; n < codigoProduto.length; n++){
-        for(i = 0; i < lista.length; i++){          
-            if(codigoProduto[n] == lista[i]){
-                contaNumeros ++
-            }
-        }
-    }
-
     
     //Executa as ações baseadas na demanda.
-    if(contaNumeros == codigoProduto.length){ //Caso tenha apenas números no código, busca pelo código.
-        loja.query(`SELECT * FROM produtos WHERE codigo_produto=?`,[codigoProduto], (error, result) => {
+    if(buscaPeloCodigo == false){ //Caso tenha apenas números no código, busca pelo código.
+        loja.query(`SELECT * FROM produtos WHERE loja_id = ? AND codigo_produto = ?`,[id_da_loja, codigoProduto], (error, result) => {
             if(error){
                 res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error)
             }else{
                 if(result.length > 0){
-                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque, valor_de_compra: result[0].valor_de_compra},])  
+                    res.send([{ codigo_produto: result[0].codigo_produto, produto: result[0].nome, preco: result[0].preco_venda, estoque: result[0].estoque, valor_de_compra: result[0].preco_compra},])  
                     //console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },)
                 }else{
                     res.send({msg:"Nenhum resultado encontrado!"})
@@ -225,30 +213,8 @@ app.post("/buscar-produto", (req,res) => {
                 }  
             }
         })
-    }else if(contaNumeros == 0){ //Caso não tenha números, busca pelo nome.
-        //res.send({msg:"Busca o produto pelo nome!"})
-        loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
-            if(error){
-                res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
-                console.log(error)
-            }else{
-                //LISTA COM OS PRODUTOS ENCONTRADOS NO BANCO DE DADOS!
-                var listaProdutos = [];
-                if(result.length > 0){
-                    for(r = 0; r < result.length; r++){  
-                        //listaProdutos.push(result[r].produto)  //Adiciona cada resultado a listaProdutos
-                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque, valor_de_compra: result[0].valor_de_compra},)
-                    }
-                    res.send(listaProdutos)  
-                    //console.log(listaProdutos)
-                }else{
-                    console.log("Nenhum resultado encontrado!")
-                    res.send({msg:"Nenhum resultado encontrado!"})
-                }                  
-            }
-        })
     }else{//Em outros casos, busca pelo nome também.
-        loja.query(`SELECT * FROM produtos WHERE produto LIKE ?`,[`%${codigoProduto}%`], (error, result) => {
+        loja.query(`SELECT * FROM produtos WHERE loja_id = ? AND nome LIKE ?`,[id_da_loja, `%${codigoProduto}%`], (error, result) => {
             if(error){
                 res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error) 
@@ -257,7 +223,7 @@ app.post("/buscar-produto", (req,res) => {
                 var listaProdutos = [];
                 if(result.length > 0){
                     for(r = 0; r < result.length; r++){
-                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].produto, preco: result[r].valor_de_venda, estoque: result[r].estoque, valor_de_compra: result[0].valor_de_compra},)
+                        listaProdutos.push({ codigo_produto: result[r].codigo_produto, produto: result[r].nome, preco: result[r].preco_venda, estoque: result[r].estoque, valor_de_compra: result[r].preco_compra},)
                     }    
                     res.send(listaProdutos)  
                     console.log(listaProdutos)
@@ -340,7 +306,7 @@ async function criaDatabase_Vendas_Da_Loja(){
 }
 
 //TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÇÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
-app.post("/finalizar-venda", (req,res) => {
+/*app.post("/finalizar-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const listaDosProdutosVendidos = req.body.produtos_Vendidos;
     //PARTE EM TESTE------------
@@ -425,7 +391,117 @@ app.post("/finalizar-venda", (req,res) => {
         }      
     })
     //FINAL DA PARTE EM TESTE ---------
+})*/
+
+//A NOVA FUNCAO DE FINALIZAR VENDA, COM A REESTRUTURACAO!
+
+//console.log(agora.toLocaleTimeString('pt-BR')); // Ex: 14:30:05
+function dataEhoraSistema(){
+    const agora = new Date();
+    //console.log(agora.toLocaleTimeString('pt-BR'));
+    return agora;
+}
+
+
+app.post("/finalizar-venda", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const listaDosProdutosVendidos = req.body.produtos_Vendidos;
+    //PARTE EM TESTE------------
+    contador = 0;
+    const acessa_Database_Vendas = mysql.createPool({
+        host: "localhost",
+        user: "root",
+        password: "123456",
+        database: `lojas`,
+    });
+
+    //CALCULA totalVenda & Custo Total.
+    var totalVenda = 0;
+    var custoTotal = 0;
+
+    console.log(listaDosProdutosVendidos)
+    for(c = 0; c < listaDosProdutosVendidos.length; c++){
+        totalVenda += listaDosProdutosVendidos[c][3]
+        custoTotal += listaDosProdutosVendidos[c][4]
+    }
+    //console.log(`total Venda: ${totalVenda}`)
+    //console.log(`custo total: ${custoTotal}`)
+    //----------------------------------------------------
+
+    acessa_Database_Vendas.getConnection((err, conn) => {
+        if (err) {
+            console.log(err);
+            return res.send({ msg: 'Erro conexão' });
+        }
+
+        conn.beginTransaction(err => {
+            if (err) {
+            conn.release();
+            return res.send({ msg: 'Erro transação' });
+            }
+
+            conn.query(`
+            INSERT INTO vendas (loja_id, data_venda, hora_venda, total, custo_total)
+            VALUES (?, ?, ?, ?, ?)
+            `, [id_da_loja, dataEhoraSistema(), dataEhoraSistema(), totalVenda, custoTotal],
+            (erro, result) => {
+
+            if (erro) {
+                return conn.rollback(() => {
+                conn.release();
+                console.log(erro);
+                res.send({ msg: 'Erro!' });
+                });
+            }
+
+            const vendaId = result.insertId;
+            console.log(`Venda ID: ${vendaId}`)
+
+            const itens = listaDosProdutosVendidos.map(p => [
+                vendaId,
+                p[0],
+                p[1],
+                p[2],
+                p[3],
+                p[4],
+                p[2] * p[3]
+            ]);
+
+            conn.query(`
+                INSERT INTO vendas_itens
+                (venda_id, produto_id, produto_nome, quantidade, preco_venda, preco_compra, subtotal)
+                VALUES ?
+            `, [itens], erro => {
+
+                if (erro) {
+                return conn.rollback(() => {
+                    conn.release();
+                    console.log(erro);
+                    res.send({ msg: 'Erro!' });
+                });
+                }
+
+                conn.commit(err => {
+                if (err) {
+                    return conn.rollback(() => {
+                    conn.release();
+                    console.log(err);
+                    res.send({ msg: 'Erro!' });
+                    });
+                }
+
+                conn.release();
+                res.send({ msg: 'Sucesso!' });
+                });
+            });
+
+            });
+        });
+    });
+
+
 })
+
 
 app.post("/busca-Vendas-Do-Dia", (req,res) => { 
     const id_da_loja = req.body.id_da_loja;

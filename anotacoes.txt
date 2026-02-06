@@ -1,0 +1,85 @@
+SERVIDOR TINHA 1409 LINHAS DE CÓDIGO NO INDEX.JS ANTES DA REESTRUTURAÇÃO NO SERVIDOR.
+ÁREA PARA INFORMACOES SOBRE 
+
+ESTRUTURA DAS DATABASES:
+
+-lojas-
+    ->produtos
+    ->vendas
+    ->pixgerados(futuramente para quando o cliente puder gerar o pix diretamente na tela de vendas.)
+    ->venda_itens(Os itens vendidos em vendas.)
+
+-usuarios-
+    ->contas_usuarios
+    ->status_planos
+    ->pixgerados(para pix que os usuarios do sistema geraram para pagar algo do sistema.)
+
+
+DATABASE LOJAS:
+-> CREATE DATABASE lojas;
+
+-TABELA PRODUTOS: (vou reestruturar as vendas primeiro.)
+
+DENTRO DA DATABASE LOJAS:
+-TABELA PRODUTOS:
+    CREATE TABLE produtos (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+        loja_id INT NOT NULL,
+
+        codigo_produto VARCHAR(50) NOT NULL, -- código de barras ou código manual
+
+        nome VARCHAR(150) NOT NULL,
+        tamanho VARCHAR(20),
+
+        estoque INT NOT NULL DEFAULT 0,
+
+        preco_compra DECIMAL(10,2) NOT NULL,
+        preco_venda DECIMAL(10,2) NOT NULL,
+
+        local_armazenamento VARCHAR(50),
+
+        ativo BOOLEAN DEFAULT TRUE,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+        UNIQUE KEY uk_loja_codigo (loja_id, codigo_produto),
+        INDEX idx_loja (loja_id),
+        INDEX idx_loja_nome (loja_id, nome)
+    );
+
+
+
+-TABELA VENDAS & VENDA_ITENS:
+
+    CREATE TABLE vendas(
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        loja_id INT NOT NULL,
+        data_venda DATE NOT NULL,
+        hora_venda TIME NOT NULL,
+        total DECIMAL(10,2) NOT NULL,
+        custo_total decimal(10,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        INDEX idx_loja_data (loja_id, data_venda)
+    );
+
+    CREATE TABLE vendas_itens (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        venda_id BIGINT NOT NULL,
+        produto_id INT NOT NULL,
+
+        produto_nome VARCHAR(100) NOT NULL, -- snapshot
+        quantidade INT NOT NULL,
+        preco_venda DECIMAL(10,2) NOT NULL,
+        preco_compra DECIMAL(10,2) NOT NULL,
+        subtotal DECIMAL(10,2) NOT NULL,
+
+        FOREIGN KEY (venda_id) REFERENCES vendas(id),
+        INDEX idx_venda (venda_id),
+        INDEX idx_produto (produto_id)
+    );
+
+
+
