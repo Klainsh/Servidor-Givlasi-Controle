@@ -22,6 +22,13 @@ const db0 = mysql.createPool({
     password: "123456",
 });
 
+const acessa_Database_Vendas = mysql.createPool({
+    host: "localhost",
+    user: "root",
+    password: "123456",
+    database: `lojas`,
+});
+
 const dbPixGerados = mysql.createPool({
     host: "localhost",
     user: "root",
@@ -402,25 +409,19 @@ function dataEhoraSistema(){
     return agora;
 }
 
-
+//DEPOIS VOU SEPARAR ESSAS "FUNCOES" TUDO QUE ESTÃO DENTRO DELA.
 app.post("/finalizar-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const listaDosProdutosVendidos = req.body.produtos_Vendidos;
     //PARTE EM TESTE------------
     contador = 0;
-    const acessa_Database_Vendas = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `lojas`,
-    });
 
     //CALCULA totalVenda & Custo Total.
-    var totalVenda = 0;
-    var custoTotal = 0;
+    let totalVenda = 0;
+    let custoTotal = 0;
 
     console.log(listaDosProdutosVendidos)
-    for(c = 0; c < listaDosProdutosVendidos.length; c++){
+    for(let c = 0; c < listaDosProdutosVendidos.length; c++){
         totalVenda += listaDosProdutosVendidos[c][3]
         custoTotal += listaDosProdutosVendidos[c][4]
     }
@@ -433,13 +434,13 @@ app.post("/finalizar-venda", (req,res) => {
             console.log(err);
             return res.send({ msg: 'Erro conexão' });
         }
-
+        //INICIO A TRANSAÇÃO
         conn.beginTransaction(err => {
             if (err) {
-            conn.release();
-            return res.send({ msg: 'Erro transação' });
+                conn.release();
+                return res.send({ msg: 'Erro transação' });
             }
-
+            //INSIRO OS DADOS DA VENDA.
             conn.query(`
             INSERT INTO vendas (loja_id, data_venda, hora_venda, total, custo_total)
             VALUES (?, ?, ?, ?, ?)
@@ -455,6 +456,8 @@ app.post("/finalizar-venda", (req,res) => {
             }
 
             const vendaId = result.insertId;
+
+            //INSIRO OS ITENS QUE FORAM VENDIDOS.
             console.log(`Venda ID: ${vendaId}`)
 
             const itens = listaDosProdutosVendidos.map(p => [
@@ -473,15 +476,58 @@ app.post("/finalizar-venda", (req,res) => {
                 VALUES ?
             `, [itens], erro => {
 
-                if (erro) {
-                return conn.rollback(() => {
-                    conn.release();
-                    console.log(erro);
-                    res.send({ msg: 'Erro!' });
-                });
-                }
+            if (erro) {
+            return conn.rollback(() => {
+                conn.release();
+                console.log(erro);
+                res.send({ msg: 'Erro!' });
+            });
+            }
 
-                conn.commit(err => {
+            //REMOVE ESTOQUE.
+            let processados = 0;
+
+            listaDosProdutosVendidos.forEach(p => {
+
+                const produtoId = p[0];
+                const qtdVendida = p[2];
+
+                conn.query(`
+                    UPDATE produtos
+                    SET estoque = estoque - ?
+                    WHERE loja_id = ? AND id = ?
+                `, [qtdVendida, id_da_loja, produtoId], (erro) => {
+
+                    if (erro) {
+                        return conn.rollback(() => {
+                            conn.release();
+                            console.log(erro);
+                            res.send({ msg: 'Erro!' });
+                        });
+                    }
+
+                    processados++;
+
+                    // quando todos forem atualizados → commit
+                    if (processados === listaDosProdutosVendidos.length) {
+
+                        conn.commit(err => {
+                            if (err) {
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    console.log(err);
+                                    res.send({ msg: 'Erro!' });
+                                });
+                            }
+
+                        });
+                    }
+                });
+            });
+
+            
+            //FINALIZO A TRANSIÇÃO.
+            conn.commit(err => {
                 if (err) {
                     return conn.rollback(() => {
                     conn.release();
@@ -492,16 +538,14 @@ app.post("/finalizar-venda", (req,res) => {
 
                 conn.release();
                 res.send({ msg: 'Sucesso!' });
-                });
+            });
+
             });
 
             });
         });
     });
-
-
 })
-
 
 app.post("/busca-Vendas-Do-Dia", (req,res) => { 
     const id_da_loja = req.body.id_da_loja;
