@@ -22,7 +22,7 @@ const db0 = mysql.createPool({
     password: "123456",
 });
 
-const acessa_Database_Vendas = mysql.createPool({
+const acessa_Database_Lojas = mysql.createPool({
     host: "localhost",
     user: "root",
     password: "123456",
@@ -164,21 +164,14 @@ app.post("/cadastrar-produto", (req,res) => {
 
     console.log(id_da_loja);
 
-    const loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `lojas`,
-    });
-
-    loja.query(`SELECT codigo_produto FROM produtos WHERE loja_id = ? AND codigo_produto = ?`, [id_da_loja, codigo_produto] ,(error, result) => {
+    acessa_Database_Lojas.query(`SELECT codigo_produto FROM produtos WHERE loja_id = ? AND codigo_produto = ?`, [id_da_loja, codigo_produto] ,(error, result) => {
         if(error){
             console.log(`Erro: ${error}`)
             res.send({msg:"Erro"})
         }if(result.length > 0){
             res.send({msg:"Já existe um produto cadastrado com esse código!"})
         }else{
-            loja.query("INSERT INTO produtos(loja_id, codigo_produto, nome, tamanho, estoque, preco_compra, preco_venda, local_armazenamento) VALUES (?,?,?,?,?,?,?,?)",[id_da_loja, codigo_produto, produto, tamanho_produto, estoque, preco_compra, preco_venda, local_armazenamento],(error) => {
+            acessa_Database_Lojas.query("INSERT INTO produtos(loja_id, codigo_produto, nome, tamanho, estoque, preco_compra, preco_venda, local_armazenamento) VALUES (?,?,?,?,?,?,?,?)",[id_da_loja, codigo_produto, produto, tamanho_produto, estoque, preco_compra, preco_venda, local_armazenamento],(error) => {
                 if(error){
                     console.log("Ocorreu um erro ao tentar cadastrar o produto.")
                     console.log(error)
@@ -197,16 +190,10 @@ app.post("/buscar-produto", (req,res) => {
     const codigoProduto = req.body.codigoProduto;
     const id_da_loja = req.body.id_da_loja;
     const buscaPeloCodigo = req.body.modoDeBusca;//INFORMA SE O SERVIDOR DEVE BUSCAR PELO CÓDIGO OU PELO NOME DO PRODUTO.
-    const loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `lojas`,
-    });
     
     //Executa as ações baseadas na demanda.
     if(buscaPeloCodigo == false){ //Caso tenha apenas números no código, busca pelo código.
-        loja.query(`SELECT * FROM produtos WHERE loja_id = ? AND codigo_produto = ?`,[id_da_loja, codigoProduto], (error, result) => {
+        acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ? AND codigo_produto = ?`,[id_da_loja, codigoProduto], (error, result) => {
             if(error){
                 res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error)
@@ -221,7 +208,7 @@ app.post("/buscar-produto", (req,res) => {
             }
         })
     }else{//Em outros casos, busca pelo nome também.
-        loja.query(`SELECT * FROM produtos WHERE loja_id = ? AND nome LIKE ?`,[id_da_loja, `%${codigoProduto}%`], (error, result) => {
+        acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ? AND nome LIKE ?`,[id_da_loja, `%${codigoProduto}%`], (error, result) => {
             if(error){
                 res.send({msg:"Ocorreu um erro ao tentar buscar o produto desejado!"})
                 console.log(error) 
@@ -312,94 +299,6 @@ async function criaDatabase_Vendas_Da_Loja(){
     })
 }
 
-//TENHO QUE REESTRUTURAR ESSA PORCARIA DEPOIS, CRIAR FUNÇÕES SEPARADAS PARA O CÓDIGO FICAR MAIS LIMPO.
-/*app.post("/finalizar-venda", (req,res) => {
-    const id_da_loja = req.body.id_da_loja;
-    const listaDosProdutosVendidos = req.body.produtos_Vendidos;
-    //PARTE EM TESTE------------
-    contador = 0;
-    const acessa_Database_Vendas_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `vendas_loja${id_da_loja}`,
-    });
-
-     
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    })
-    acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (err,result) => {
-        if(err){
-            console.log("Erro ao consultar tabelas de vendas")
-        }else{
-            //Conta quantas tabelas de vendas tem na loja.
-            for(i = 0; i < result.length; i++){
-                resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];
-                if(resultado.substr(-8) == dataSistema()){                  
-                    contador ++
-                }               
-            }
-            //Retorna o nome a ser usado na próxima tabela.
-            var nomeDaTabela = `venda${contador+1}${dataSistema()}`
-
-            //Cria a tabela que vai ficar os dados da venda.
-            acessa_Database_Vendas_Loja.query(`CREATE TABLE IF NOT EXISTS ${nomeDaTabela}(
-                                                cod_produto int not null,
-                                                produto varchar(41) not null,
-                                                unidades int not null,
-                                                preco float not null,
-                                                valor_de_compra float not null)Default charset=utf8;`, (erro) => {
-                                                    if(erro){
-                                                        console.log(`Erro ao tentar criar tabela da venda ERRO: ${erro}`)
-                                                        res.send({msg:"Erro!"})
-                                                    }else{
-                                                        //Parte que insere os produtos da venda na tabela.
-                                                        if(listaDosProdutosVendidos.length != 0){
-                                                            for(produtos = 0; produtos < listaDosProdutosVendidos.length; produtos ++){
-                                                                acessa_Database_Vendas_Loja.query(`INSERT INTO ${nomeDaTabela} (cod_produto,produto,unidades,preco,valor_de_compra) VALUES(${listaDosProdutosVendidos[produtos][0]},'${listaDosProdutosVendidos[produtos][1]}',${listaDosProdutosVendidos[produtos][2]},${listaDosProdutosVendidos[produtos][3]},'${listaDosProdutosVendidos[produtos][4]}')`, (erro) => {
-                                                                    if(erro){
-                                                                        console.log(`Erro ao tentar cadastrar os produtos ${erro}`)
-                                                                    }
-                                                                })
-                                                            }   
-                                                            //Fim da parte que insere os produtos da venda na tabela.  
-
-                                                            res.send({msg:"Sucesso!"})//Finalizou todo o processo.
-                                                        }else{
-                                                            res.send({msg:"Erro!"})
-                                                        }
-                                                        //Fim da parte que insere os produtos na tabela.
-                                                    }
-            })
-
-            //PARTE QUE REMOVE OS PRODUTOS DO ESTOQUE!
-            for(i = 0; i < listaDosProdutosVendidos.length; i++){
-                const codigo_Do_Produto = listaDosProdutosVendidos[i][0]
-                const nome_Do_Produto_Vendido = listaDosProdutosVendidos[i][1]
-                const unidades_Vendidas = listaDosProdutosVendidos[i][2]
-                
-                acessa_Database_Da_Loja.query(`SELECT * FROM produtos WHERE codigo_produto=${codigo_Do_Produto}`, (error, resultado) => {
-                    if(error){
-                        console.log(`Não foi possível remover as unidades dos produtos vendidos. Erro: ${error}`)
-                        res.send({msg:"Não foi possível remover do estoque os produtos vendidos!"})
-                    }else{
-                        var subtrai_Estoque = (resultado[0].estoque - unidades_Vendidas)
-                        console.log(`Nome do produto vendido: ${nome_Do_Produto_Vendido} Unidades vendidas: ${unidades_Vendidas}`)
-                        console.log(`Estoque do produto: ${resultado[0].estoque} Estoque substituído: ${subtrai_Estoque}`)
-                        acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${subtrai_Estoque} WHERE codigo_produto=${codigo_Do_Produto}`)
-                    }
-                })
-            }
-            //FIM DA PARTE QUE REMOVE OS PRODUTOS DO ESTOQUE!
-        }      
-    })
-    //FINAL DA PARTE EM TESTE ---------
-})*/
-
 //A NOVA FUNCAO DE FINALIZAR VENDA, COM A REESTRUTURACAO!
 
 //console.log(agora.toLocaleTimeString('pt-BR')); // Ex: 14:30:05
@@ -423,13 +322,13 @@ app.post("/finalizar-venda", (req,res) => {
     console.log(listaDosProdutosVendidos)
     for(let c = 0; c < listaDosProdutosVendidos.length; c++){
         totalVenda += listaDosProdutosVendidos[c][3]
-        custoTotal += listaDosProdutosVendidos[c][4]
+        custoTotal += listaDosProdutosVendidos[c][4] * listaDosProdutosVendidos[c][2]
     }
     //console.log(`total Venda: ${totalVenda}`)
     //console.log(`custo total: ${custoTotal}`)
     //----------------------------------------------------
 
-    acessa_Database_Vendas.getConnection((err, conn) => {
+    acessa_Database_Lojas.getConnection((err, conn) => {
         if (err) {
             console.log(err);
             return res.send({ msg: 'Erro conexão' });
@@ -458,16 +357,14 @@ app.post("/finalizar-venda", (req,res) => {
             const vendaId = result.insertId;
 
             //INSIRO OS ITENS QUE FORAM VENDIDOS.
-            console.log(`Venda ID: ${vendaId}`)
-
             const itens = listaDosProdutosVendidos.map(p => [
                 vendaId,
-                p[0],
-                p[1],
-                p[2],
-                p[3],
-                p[4],
-                p[2] * p[3]
+                p[0],//produto_id
+                p[1],//produto_nome
+                p[2],//quantidade
+                p[3],//preco_venda
+                p[4] * p[2],//preco_compra
+                p[3]//subtotal
             ]);
 
             conn.query(`
@@ -491,11 +388,11 @@ app.post("/finalizar-venda", (req,res) => {
 
                 const produtoId = p[0];
                 const qtdVendida = p[2];
-
+                console.log(`produto id: ${produtoId} id da loja nesta operação: ${id_da_loja}`)
                 conn.query(`
                     UPDATE produtos
                     SET estoque = estoque - ?
-                    WHERE loja_id = ? AND id = ?
+                    WHERE loja_id = ? AND codigo_produto = ?
                 `, [qtdVendida, id_da_loja, produtoId], (erro) => {
 
                     if (erro) {
@@ -547,57 +444,24 @@ app.post("/finalizar-venda", (req,res) => {
     });
 })
 
+//FUNCAO JA REFATORADA.
 app.post("/busca-Vendas-Do-Dia", (req,res) => { 
     const id_da_loja = req.body.id_da_loja;
-
-    const acessa_Database_Vendas_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `vendas_loja${id_da_loja}`,
-    });
     
-    acessa_Database_Vendas_Loja.query(`SHOW TABLES FROM vendas_loja${id_da_loja}`, (error, result) => {
+    acessa_Database_Lojas.query(`SELECT SUM(total) FROM vendas WHERE loja_id = ?
+                                 AND data_venda = CURDATE();
+                                `,[id_da_loja], 
+        (error, result) => {
         if(error){
-            console.log("Erro ao tentar: SHOW TABLES FROM vendas_loja" + error)
-            console.log({msg:"Erro"})
-        }else{
-            var listaDosProdutos = []
-            contador = 0
-            contador1 = 0
-            if(result.length > 0){  //SE TIVER ALGUMA VENDA NO BANCO DE DADOS DA LOJA
-                
-                //Conta quantas tabelas de vendas tem na loja.
-                for(i = 0; i < result.length; i++){
-                    const resultado = result[i][`Tables_in_vendas_loja${id_da_loja}`];//RETORNA EX: VENDA107012025
-                    
-                    if(resultado.substr(-8) == dataSistema()){ //SE TIVER VENDA COM A DATA DE HOJE    
-                        contador++
-                        acessa_Database_Vendas_Loja.query(`SELECT * FROM ${resultado}`, (err, result2) => {
-                            if(err){
-                                console.log("Erro")
-                            }else{              
-                                contador1 ++                 
-                                for(a = 0; a < result2.length; a ++){
-                                    listaDosProdutos.push({codigoProduto: result2[a].cod_produto, produto: result2[a].produto, unidades: result2[a].unidades, preco: result2[a].preco, valor_de_compra: result2[a].valor_de_compra})//ENVIANDO OS DADOS DA VENDA PARA A LISTA.                                             
-                                }                                
-                            }
-                            //SE JÁ TIVER VERIFICADO TODAS AS VENDAS DO DIA, ENVIO AS INFORMAÇÕES PRO BANCO DE DADOS
-                            //EU NÃO SEI NEM PORQUE ESSA PORCARIA FUNCIONA, ATÉ PORQUE OS CONTADORES ACABAM TENDO VALORES IGUAIS A CADA LOOP, MAS SÓ FUNCIONA DESSE JEITO, ACREDITO QUE ESTOU PERDENDO DESEMPENHO, PORQUE ACABA "ENVIANDO" A CADA NOVO LOOP, MAS NÃO DÁ AQUELE ERRO DE JÁ TER ENVIADO AS INFORMAÇÕES, ENTENDI NADA, MAS TÁ FUNCIONANDO KKK
-                            if(contador1 == contador){
-                                res.send(listaDosProdutos)                              
-                            }
-                                                              
-                        })
-                    }
-                }  
-                if(contador == 0){//caso não tenha nenhuma venda na data de hoje no contador, ele retorna que não há venda
-                    res.send({msg:"Nenhuma venda realizada hoje!"})
-                }             
+            console.log("Erro ao somar total de vendas." + error)
+            console.log({msg:"Erro!"})
+        }else{        
+            const resultado = result[0]["SUM(total)"]
+            if(result.length > 0){  //SE TIVER ALGUM VALOR EM VENDA MAIOR QUE 0.
+                res.send({msg: resultado})
             }else{
-                console.log("Nenhuma venda encontrada!")
-                res.send({msg:"Nenhuma venda encontrada!"})
-            }     
+                res.send({msg:"Nenhum faturamento hoje."})
+            } 
         }
 
     })
@@ -833,21 +697,15 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
     })
 })
 
+//FUNCAO JÁ REESTRUTURADA.
 app.post("/busca-produtos", (req, res) =>{
     const id_da_loja = req.body.id_da_loja;
     listaDosProdutos = []
 
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    })
-
-    acessa_Database_Da_Loja.query(`SELECT * FROM produtos`, (error, result) => {
+    acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ?`, [id_da_loja], (error, result) => {
         if(error){
             res.send("Erro!")
-            console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
+            console.log(`Erro ao tentar buscar produtos. Erro: ${error}`)
         }else{
             for(i = 0; i < result.length; i++){
                 listaDosProdutos.push(result[i])
