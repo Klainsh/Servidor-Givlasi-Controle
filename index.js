@@ -230,6 +230,90 @@ app.post("/buscar-produto", (req,res) => {
     }
 })
 
+//NOVA FUNCAO REFATORADA!
+//Fornece as informacoes dos produtos vendidos para a tela: Produtos Vendidos.
+app.post("/busca_produtos_vendidos_por_data", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const dataDia = req.body.dataDia;
+    const dataMes = req.body.dataMes;
+    const dataAno = req.body.dataAno;
+    console.log(`dia: ${dataDia} mes ${dataMes} ano: ${dataAno} id_loja: ${id_da_loja}`)
+    
+    if(dataDia != undefined && dataMes != undefined && dataAno != undefined){//SE A BUSCA FOR POR DIA, MES E ANO.         
+        const dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
+
+        const dataFim = new Date(dataInicio);
+        dataFim.setDate(dataFim.getDate() + 1);
+        const dataFimFormatada = dataFim.toISOString().slice(0,10);
+        acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                    FROM vendas v
+                                    JOIN vendas_itens vi ON vi.venda_id = v.id
+                                    WHERE v.loja_id = ?
+                                    AND v.data_venda >= ?
+                                    AND v.data_venda < ?
+                                    GROUP BY vi.produto_id, vi.produto_nome
+                                    ORDER BY faturamento DESC;
+        `, [id_da_loja, dataInicio, dataFimFormatada],
+        (error, result) => {
+
+            if(error){
+                console.log("Erro ao buscar vendas do dia:", error);
+                res.status(500).send({msg:"Erro"});
+            }else{
+                console.log(result)
+                res.send({msg: result});
+            }
+        });
+
+    }else if(dataDia == undefined && dataMes != undefined && dataAno != undefined){//Quando a busca foi feita apenas por mês e ano.
+        const dataInicio = `${dataAno}-${dataMes}-01`;
+
+        const dataFim = new Date(dataInicio);
+        dataFim.setMonth(dataFim.getMonth() + 1);
+        const dataFimFormatada = dataFim.toISOString().slice(0,10);
+
+        acessa_Database_Lojas.query(`
+            SELECT SUM(total) AS faturamento, SUM(custo_total) AS custo FROM vendas
+            WHERE loja_id = ? AND data_venda >= ? AND data_venda < ?
+        `, [id_da_loja, dataInicio, dataFimFormatada],
+        (error, result) => {
+
+            if(error){
+                console.log("Erro ao buscar vendas do mês:", error);
+                res.status(500).send({msg:"Erro"});
+            }else{
+                console.log(result)
+                res.send({msg: result});
+            }
+        });
+        
+    }else if(dataDia == undefined && dataMes == undefined && dataAno != undefined){//Quando a busca é feita buscando apenas pelo ano 
+        
+        const dataInicio = `${dataAno}-01-01`;
+        const dataFim = `${Number(dataAno) + 1}-01-01`;
+
+        acessa_Database_Lojas.query(`
+            SELECT SUM(total) AS faturamento, SUM(custo_total) AS custo FROM vendas
+            WHERE loja_id = ? AND data_venda >= ? AND data_venda < ?
+        `, [id_da_loja, dataInicio, dataFim],
+        (error, result) => {
+
+            if(error){
+                console.log("Erro ao buscar vendas do ano:", error);
+                res.status(500).send({msg:"Erro"});
+            }else{
+                res.send({msg: result});
+            }
+        });
+    }
+})
+
+
 async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
     db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
         if(error){
@@ -540,19 +624,15 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
     }
 })
 
+//FUNCAO REFATORADA.
 app.post("/adicionar-estoque", (req, res) =>{
     const id_da_loja = req.body.id_da_loja;
     const codigoProduto = req.body.codigoProduto;
     const novoEstoque = req.body.novoEstoque;
 
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    })
-
-    acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${novoEstoque} WHERE codigo_produto=${codigoProduto}`, (error) => {
+    acessa_Database_Lojas.query(`UPDATE produtos SET estoque = estoque + ?
+                                WHERE loja_id = ? AND codigo_produto = ?;`,
+                                [novoEstoque, id_da_loja, codigoProduto], (error) => {
         if(error){
             res.send("Erro!")
             console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
@@ -568,20 +648,18 @@ app.post("/remover-estoque", (req, res) =>{
     const codigoProduto = req.body.codigoProduto;
     const novoEstoque = req.body.novoEstoque;
 
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    })
-
-    acessa_Database_Da_Loja.query(`UPDATE produtos SET estoque=${novoEstoque} WHERE codigo_produto=${codigoProduto}`, (error) => {
-        if(error){
-            res.send("Erro!")
-            console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
-        }else{
-            res.send("Sucesso!")
-        }
+    acessa_Database_Lojas.query(`UPDATE produtos SET estoque = estoque - ?
+                            WHERE loja_id = ? AND codigo_produto = ? AND estoque >= ?;`,
+                            [novoEstoque, id_da_loja, codigoProduto, novoEstoque], (error) => {
+    if(error){
+        console.log(`Erro ao tentar alterar o estoque da loja: ${id_da_loja}. Erro: ${error}`)
+        return res.send("Erro!");
+    }if(res.affectedRows === 0) {
+        // Estoque insuficiente
+        return res.send("Estoque insuficiente!");
+    }else{
+        res.send("Sucesso!")
+    }
     })
     
 })
@@ -592,14 +670,8 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
     const novoValorDeCompra = req.body.novoValorDeCompra;
     const novoValorDeVenda = req.body.novoValorDeVenda;
 
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    })
-
-    acessa_Database_Da_Loja.query(`UPDATE produtos SET valor_de_compra=${novoValorDeCompra}, valor_de_venda=${novoValorDeVenda} WHERE codigo_produto=${codigoProduto}`, (error) =>{
+    acessa_Database_Lojas.query(`UPDATE produtos SET preco_compra=${novoValorDeCompra}, preco_venda=${novoValorDeVenda} 
+        WHERE loja_id = ? AND codigo_produto = ?`,[id_da_loja, codigoProduto], (error) =>{
         if(error){
             res.send("Erro!")
             console.log(`Erro ao tentar alterar valor de compra e venda. Erro: ${error}`)
