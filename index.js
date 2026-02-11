@@ -273,18 +273,35 @@ app.post("/busca_produtos_vendidos_por_data", (req,res) => {
     }else if(dataDia == undefined && dataMes != undefined && dataAno != undefined){//Quando a busca foi feita apenas por mês e ano.
         const dataInicio = `${dataAno}-${dataMes}-01`;
 
-        const dataFim = new Date(dataInicio);
-        dataFim.setMonth(dataFim.getMonth() + 1);
-        const dataFimFormatada = dataFim.toISOString().slice(0,10);
+        const dataFim = new Date(dataInicio + "T00:00:00"); // força local
+        dataFim.setMonth(dataFim.getMonth() + 1); //pega o próximo m
+        dataFim.setDate(0);//para pegar o ultimo dia do mês anterior.
 
-        acessa_Database_Lojas.query(`
-            SELECT SUM(total) AS faturamento, SUM(custo_total) AS custo FROM vendas
-            WHERE loja_id = ? AND data_venda >= ? AND data_venda < ?
+        // formata sem timezone bug
+        const ano = dataFim.getFullYear();
+        const mes = String(dataFim.getMonth() + 1).padStart(2, "0");
+        const dia = String(dataFim.getDate()).padStart(2, "0");
+
+        const dataFimFormatada = dataFim.toISOString().slice(0,10);
+        console.log(`data inicio: ${dataInicio} data Fim: ${dataFimFormatada}`)
+        acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                    FROM vendas v
+                                    JOIN vendas_itens vi ON vi.venda_id = v.id
+                                    WHERE v.loja_id = ?
+                                    AND v.data_venda >= ?
+                                    AND v.data_venda < ?
+                                    GROUP BY vi.produto_id, vi.produto_nome
+                                    ORDER BY faturamento DESC;
         `, [id_da_loja, dataInicio, dataFimFormatada],
         (error, result) => {
 
             if(error){
-                console.log("Erro ao buscar vendas do mês:", error);
+                console.log("Erro ao buscar vendas do dia:", error);
                 res.status(500).send({msg:"Erro"});
             }else{
                 console.log(result)
@@ -295,23 +312,240 @@ app.post("/busca_produtos_vendidos_por_data", (req,res) => {
     }else if(dataDia == undefined && dataMes == undefined && dataAno != undefined){//Quando a busca é feita buscando apenas pelo ano 
         
         const dataInicio = `${dataAno}-01-01`;
-        const dataFim = `${Number(dataAno) + 1}-01-01`;
+        const dataFim = `${dataAno}-12-31`;
 
-        acessa_Database_Lojas.query(`
-            SELECT SUM(total) AS faturamento, SUM(custo_total) AS custo FROM vendas
-            WHERE loja_id = ? AND data_venda >= ? AND data_venda < ?
+        console.log(`data inicio: ${dataInicio} data Fim: ${dataFim}`)
+        acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                    FROM vendas v
+                                    JOIN vendas_itens vi ON vi.venda_id = v.id
+                                    WHERE v.loja_id = ?
+                                    AND v.data_venda >= ?
+                                    AND v.data_venda < ?
+                                    GROUP BY vi.produto_id, vi.produto_nome
+                                    ORDER BY faturamento DESC;
         `, [id_da_loja, dataInicio, dataFim],
         (error, result) => {
 
             if(error){
-                console.log("Erro ao buscar vendas do ano:", error);
+                console.log("Erro ao buscar vendas do dia:", error);
                 res.status(500).send({msg:"Erro"});
             }else{
+                console.log(result)
                 res.send({msg: result});
             }
         });
     }
 })
+
+//NOVA FUNCAO REFATORADA!
+/*Fornece as informacoes de produtos ESPECIFICOS para a tela: Produtos Vendidos.
+AS VEZES O CLIENTE QUER BUSCAR PELO NOME OU CÓDIGO DO PRODUTO.*/
+app.post("/busca_produtos_vendidos_especificos_por_data", (req,res) => {
+    const id_da_loja = req.body.id_da_loja;
+    const dataDia = req.body.dataDia;
+    const dataMes = req.body.dataMes;
+    const dataAno = req.body.dataAno;
+    const produto = req.body.produto;
+    const buscaPorCodigo = req.body.buscaPorCodigo;//Aqui recebe true para buscar pelo nome referencia ou false para buscar pelo codigo.
+    console.log(`dia: ${dataDia} mes ${dataMes} ano: ${dataAno} id_loja: ${id_da_loja}`)
+    
+    if(dataDia != undefined && dataMes != undefined && dataAno != undefined){//SE A BUSCA FOR POR DIA, MES E ANO.         
+        const dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
+
+        const dataFim = new Date(dataInicio);
+        dataFim.setDate(dataFim.getDate() + 1);
+        const dataFimFormatada = dataFim.toISOString().slice(0,10);
+        if(buscaPorCodigo == true){//busca pelo nome de referencia.
+            acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                        FROM vendas v
+                                        JOIN vendas_itens vi ON vi.venda_id = v.id
+                                        WHERE v.loja_id = ?
+                                        AND v.data_venda >= ?
+                                        AND v.data_venda < ?
+                                        AND vi.produto_nome LIKE ?
+                                        GROUP BY vi.produto_id, vi.produto_nome
+                                        ORDER BY faturamento DESC;                                   
+            `, [id_da_loja, dataInicio, dataFim,`%${produto}%`],
+            (error, result) => {
+
+                if(error){
+                    console.log("Erro ao buscar vendas do dia:", error);
+                    res.status(500).send({msg:"Erro"});
+                }else{
+                    console.log(result)
+                    res.send({msg: result});
+                }
+            });
+        }else{//Busca pelo código
+            acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                        FROM vendas v
+                                        JOIN vendas_itens vi ON vi.venda_id = v.id
+                                        WHERE v.loja_id = ?
+                                        AND v.data_venda >= ?
+                                        AND v.data_venda < ?
+                                        AND vi.produto_id = ?
+                                        GROUP BY vi.produto_id, vi.produto_nome
+                                        ORDER BY faturamento DESC;
+                                                                    
+            `, [id_da_loja, dataInicio, dataFim, produto],
+            (error, result) => {
+
+                if(error){
+                    console.log("Erro ao buscar vendas do dia:", error);
+                    res.status(500).send({msg:"Erro"});
+                }else{
+                    console.log(result)
+                    res.send({msg: result});
+                }
+            });
+        }
+
+    }else if(dataDia == undefined && dataMes != undefined && dataAno != undefined){//Quando a busca foi feita apenas por mês e ano.
+        const dataInicio = `${dataAno}-${dataMes}-01`;
+
+        const dataFim = new Date(dataInicio + "T00:00:00"); // força local
+        dataFim.setMonth(dataFim.getMonth() + 1); //pega o próximo m
+        dataFim.setDate(0);//para pegar o ultimo dia do mês anterior.
+
+        // formata sem timezone bug
+        const ano = dataFim.getFullYear();
+        const mes = String(dataFim.getMonth() + 1).padStart(2, "0");
+        const dia = String(dataFim.getDate()).padStart(2, "0");
+
+        const dataFimFormatada = dataFim.toISOString().slice(0,10);
+        if(buscaPorCodigo == true){//busca pelo nome de referencia.
+            acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                        FROM vendas v
+                                        JOIN vendas_itens vi ON vi.venda_id = v.id
+                                        WHERE v.loja_id = ?
+                                        AND v.data_venda >= ?
+                                        AND v.data_venda < ?
+                                        AND vi.produto_nome LIKE ?
+                                        GROUP BY vi.produto_id, vi.produto_nome
+                                        ORDER BY faturamento DESC;                                   
+            `, [id_da_loja, dataInicio, dataFim,`%${produto}%`],
+            (error, result) => {
+
+                if(error){
+                    console.log("Erro ao buscar vendas do dia:", error);
+                    res.status(500).send({msg:"Erro"});
+                }else{
+                    console.log(result)
+                    res.send({msg: result});
+                }
+            });
+        }else{//Busca pelo código.
+            acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                        FROM vendas v
+                                        JOIN vendas_itens vi ON vi.venda_id = v.id
+                                        WHERE v.loja_id = ?
+                                        AND v.data_venda >= ?
+                                        AND v.data_venda < ?
+                                        AND vi.produto_id = ?
+                                        GROUP BY vi.produto_id, vi.produto_nome
+                                        ORDER BY faturamento DESC;
+                                                                    
+            `, [id_da_loja, dataInicio, dataFim, produto],
+            (error, result) => {
+
+                if(error){
+                    console.log("Erro ao buscar vendas do dia:", error);
+                    res.status(500).send({msg:"Erro"});
+                }else{
+                    console.log(result)
+                    res.send({msg: result});
+                }
+            });
+        }
+        
+    }else if(dataDia == undefined && dataMes == undefined && dataAno != undefined){//Quando a busca é feita buscando apenas pelo ano 
+        const dataInicio = `${dataAno}-01-01`;
+        const dataFim = `${dataAno}-12-31`;
+        
+        if(buscaPorCodigo == true){//busca pelo nome de referencia.
+            acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                        FROM vendas v
+                                        JOIN vendas_itens vi ON vi.venda_id = v.id
+                                        WHERE v.loja_id = ?
+                                        AND v.data_venda >= ?
+                                        AND v.data_venda < ?
+                                        AND vi.produto_nome LIKE ?
+                                        GROUP BY vi.produto_id, vi.produto_nome
+                                        ORDER BY faturamento DESC;                                   
+            `, [id_da_loja, dataInicio, dataFim,`%${produto}%`],
+            (error, result) => {
+
+                if(error){
+                    console.log("Erro ao buscar vendas do dia:", error);
+                    res.status(500).send({msg:"Erro"});
+                }else{
+                    console.log(result)
+                    res.send({msg: result});
+                }
+            });
+        }else{//Busca pelo código.
+            acessa_Database_Lojas.query(`SELECT 
+                                        vi.produto_id,
+                                        vi.produto_nome,
+                                        SUM(vi.quantidade) AS total_unidades,
+                                        SUM(vi.subtotal) AS faturamento,
+                                        SUM(vi.subtotal - vi.preco_compra) AS lucro
+                                        FROM vendas v
+                                        JOIN vendas_itens vi ON vi.venda_id = v.id
+                                        WHERE v.loja_id = ?
+                                        AND v.data_venda >= ?
+                                        AND v.data_venda < ?
+                                        AND vi.produto_id = ?
+                                        GROUP BY vi.produto_id, vi.produto_nome
+                                        ORDER BY faturamento DESC;
+                                                                    
+            `, [id_da_loja, dataInicio, dataFim, produto],
+            (error, result) => {
+
+                if(error){
+                    console.log("Erro ao buscar vendas do dia:", error);
+                    res.status(500).send({msg:"Erro"});
+                }else{
+                    console.log(result)
+                    res.send({msg: result});
+                }
+            });
+        }
+ 
+        
+    }
+})
+
 
 
 async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
