@@ -486,7 +486,7 @@ app.post("/busca_produtos_vendidos_especificos_por_data", (req,res) => {
     }else if(dataDia == undefined && dataMes == undefined && dataAno != undefined){//Quando a busca é feita buscando apenas pelo ano 
         const dataInicio = `${dataAno}-01-01`;
         const dataFim = `${dataAno}-12-31`;
-        
+         
         if(buscaPorCodigo == true){//busca pelo nome de referencia.
             acessa_Database_Lojas.query(`SELECT 
                                         vi.produto_id,
@@ -935,29 +935,81 @@ app.post("/busca-produtos", (req, res) =>{
 })
 
 //PARTE DA COMANDA
-app.post("/cria-nova-comanda", (req, res) => {
+app.post("/cria-nova-comanda", async (req, res) => {
     const id_da_loja = req.body.id_da_loja;
-    const novaComanda = req.body.novaComanda;
+    const identificador = req.body.novaComanda;
 
-    const acessa_Database_Da_Loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    })
-
-    acessa_Database_Da_Loja.query(`CREATE TABLE IF NOT EXISTS mesa_${novaComanda}(
-        cod_produto INT NOT NULL,
-        produto VARCHAR(100) NOT NULL,
-        unidades INT NOT NULL,
-        preco float NOT NULL
-        )ENGINE=INNODB default charset = utf8;`,(err) => {
-        if(err){
-            console.log("Não foi possível criar a tabela de produtos!")
-        }else{
-            res.send("Sucesso!")
+    acessa_Database_Lojas.getConnection((err, conn) => {
+        if (err) {
+            console.log(err);
+            return res.send({ msg: 'Erro conexão' });
         }
-    })
+
+        // INICIA TRANSAÇÃO
+        conn.beginTransaction(err => {
+            if (err) {
+                conn.release();
+                return res.send({ msg: 'Erro transação' });
+            }
+
+            // 1️⃣ cria venda aberta
+            conn.query(`
+                INSERT INTO vendas (loja_id, status)
+                VALUES (?, 'aberta')
+            `, [id_da_loja], (erro, result) => {
+
+                if (erro) {
+                    return conn.rollback(() => {
+                        conn.release();
+                        console.log(erro);
+                        res.send({ msg: 'Erro ao criar venda' });
+                    });
+                }
+
+                const vendaId = result.insertId;
+
+                // 2️⃣ cria mesa ligada à venda
+                conn.query(`
+                    INSERT INTO mesas (loja_id, identificador, venda_id)
+                    VALUES (?, ?, ?)
+                `, [id_da_loja, identificador, vendaId], erro => {
+
+                    if (erro) {
+                        //CASO O ERRO SEJA CAUSADO POR JÁ TER UMA MESA COM O MESMO NOME.
+                        if (erro.code === 'ER_DUP_ENTRY') {
+                            return conn.rollback(() => {
+                                conn.release();
+                                res.send({ msg: 'Já existe uma mesa com esse nome aberta' });
+                            });
+                        }
+
+                        return conn.rollback(() => {
+                            conn.release();
+                            console.log(erro);
+                            res.send({ msg: 'Erro ao criar mesa' });
+                        });
+                    }
+
+                    // FINALIZA TRANSAÇÃO
+                    conn.commit(err => {
+                        if (err) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.log(err);
+                                res.send({ msg: 'Erro commit' });
+                            });
+                        }
+
+                        conn.release();
+                        res.send({
+                            msg: 'Mesa aberta com sucesso!'
+                        });
+                    });
+                });
+            });
+        });
+    });
+
 })
 
 app.post("/excluir-comanda", (req, res) => {
@@ -984,30 +1036,22 @@ app.post("/buscar-comandas-abertas", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const novaComanda = req.body.novaComanda;
 
-    const loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    });
-
-    loja.query(`SHOW TABLES`, (error, result) => {
+    acessa_Database_Lojas.query(`SELECT 
+                                m.id,
+                                m.identificador,
+                                m.venda_id,
+                                m.criada_em
+                                FROM mesas m
+                                WHERE m.loja_id = ?;
+        `,[id_da_loja], (error, result) => {
         if(error){
             console.log(error)
         }else{
             if(result.length > 0){
-                let lista_De_Comandas = ["ESCOLHA UMA COMANDA"]
-                for(let i = 0; i< result.length; i++){
-                    //console.log(result[i].Tables_in_loja139)
-                    const nome_tabela = result[i][`Tables_in_loja${id_da_loja}`]
-                    //console.log(`RESULT TESTE: ${result[i][`Tables_in_loja${id_da_loja}`]}`)
-                    if(nome_tabela.substr(0,4) == 'mesa'){//Pego só as tabelas que começam com mesa
-                        lista_De_Comandas.push(nome_tabela)
-                    }
-                }
-                res.send(lista_De_Comandas)
+                res.send(result)
             }else{
-                console.log("Não tem nenhuma comanda aberta.")
+                //console.log("Não tem nenhuma comanda aberta.")a
+                res.send(false)
             }
 
         }

@@ -6,8 +6,10 @@ ESTRUTURA DAS DATABASES:
 -lojas-
     ->produtos
     ->vendas
+    ->vendas_itens(Os itens vendidos em vendas.)
+    ->vendas_pagamentos
     ->pixgerados(futuramente para quando o cliente puder gerar o pix diretamente na tela de vendas.)
-    ->venda_itens(Os itens vendidos em vendas.)
+
 
 -usuarios-
     ->contas_usuarios
@@ -52,7 +54,7 @@ DENTRO DA DATABASE LOJAS:
 
 
 -TABELA VENDAS & VENDA_ITENS:
-
+---VENDAS---
     CREATE TABLE vendas(
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         loja_id INT NOT NULL,
@@ -65,6 +67,54 @@ DENTRO DA DATABASE LOJAS:
         INDEX idx_loja_data (loja_id, data_venda)
     );
 
+    ---ADAPTANDO A TABELA VENDAS---
+        *Adicionar status da venda*
+        *Preciso para usar a tela de vendas por mesa*
+        ALTER TABLE vendas 
+        ADD status ENUM('aberta', 'fechada', 'cancelada') 
+        NOT NULL DEFAULT 'aberta';
+
+        *Permitir NULL enquanto a venda está aberta.
+        ALTER TABLE vendas
+        MODIFY data_venda DATE NULL,
+        MODIFY hora_venda TIME NULL,
+        MODIFY total DECIMAL(10,2) NULL,
+        MODIFY custo_total DECIMAL(10,2) NULL;
+
+        *Adiciono indice da mesa para busca rápida:
+        CREATE INDEX idx_vendas_loja_status 
+        ON vendas(loja_id, status);
+
+---FIM VENDAS---
+
+---MESAS---
+CREATE TABLE mesas (
+    id BIGINT(20) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+
+    loja_id INT(11) NOT NULL,
+
+    identificador VARCHAR(100) NOT NULL, 
+
+    venda_id BIGINT(20) NOT NULL,
+
+    criada_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_loja (loja_id),
+    INDEX idx_venda (venda_id),
+
+    CONSTRAINT fk_mesa_venda 
+        FOREIGN KEY (venda_id) REFERENCES vendas(id)
+) ENGINE=InnoDB;
+
+    --ADAPTANDO TABLE MESAS---
+    *Para garantir que uma mesma loja não possa criar duas mesas 2 por exemplo
+    ALTER TABLE mesas
+    ADD UNIQUE KEY uk_loja_identificador (loja_id, identificador);
+
+
+---FIM MESAS
+
+---VENDAS ITENS---
     CREATE TABLE vendas_itens (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         venda_id BIGINT NOT NULL,
@@ -80,6 +130,34 @@ DENTRO DA DATABASE LOJAS:
         INDEX idx_venda (venda_id),
         INDEX idx_produto (produto_id)
     );
+---FIM VENDAS ITENS---
+
+---VENDAS PAGAMENTOS---
+    CREATE TABLE vendas_pagamentos (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    venda_id BIGINT UNSIGNED NOT NULL,
+
+    forma_pagamento ENUM(
+        'dinheiro',
+        'pix',
+        'debito',
+        'credito',
+        'transferencia'
+    ) NOT NULL,
+
+    valor DECIMAL(10,2) NOT NULL,
+
+    taxa DECIMAL(10,2) DEFAULT 0,
+
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_venda (venda_id),
+
+    CONSTRAINT fk_pag_venda
+        FOREIGN KEY (venda_id) REFERENCES vendas(id)
+    );
+---FIM VENDAS PAGAMENTOS---
 
 
 
