@@ -130,6 +130,12 @@ CREATE TABLE mesas (
         INDEX idx_venda (venda_id),
         INDEX idx_produto (produto_id)
     );
+
+    --ADAPTANDO TABLE VENDAS_ITENS--
+    *Para que não seja possivel duplicar itens
+    ALTER TABLE vendas_itens
+    ADD UNIQUE KEY uk_venda_produto (venda_id, produto_id);
+
 ---FIM VENDAS ITENS---
 
 ---VENDAS PAGAMENTOS---

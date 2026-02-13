@@ -1098,43 +1098,240 @@ app.post("/insere-itens-da-comanda", (req,res) => {
     //loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(cod_produto,produto,unidades,preco)`)
 })
 
-app.post("/buscar-itens-comanda", (req,res) => {
+/*app.post("/buscar-itens-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
-    const comanda = req.body.comanda;
-    console.log(`buscou itens da comanda.`)
-    const loja = mysql.createPool({
-        host: "localhost",
-        user: "root",
-        password: "123456",
-        database: `loja${id_da_loja}`,
-    });
+    const comanda = req.body.comanda;//identificador
+    console.log(`buscou itens da comanda.${id_da_loja} ${comanda}`)
 
     let itensNaComanda = []
 
-    loja.query(`SELECT * FROM ${comanda}`,(error, result) => {
+    acessa_Database_Lojas.query(`SELECT 
+                                vi.id,
+                                vi.produto_id,
+                                vi.produto_nome,
+                                vi.quantidade,
+                                vi.preco_venda,
+                                vi.preco_compra,
+                                vi.subtotal
+                                FROM mesas m
+                                JOIN vendas_itens vi ON vi.venda_id = m.venda_id
+                                WHERE m.loja_id = ?
+                                AND m.identificador = ?
+        `,[id_da_loja, comanda],(error, result) => {
         if(error){
             console.log(error)
         }else{
             if(result.length > 0){//Caso tenha itens na comanda selecionada.
-                for(let i = 0; i< result.length; i++){
+                console.log(result)
+                /*for(let i = 0; i< result.length; i++){
                     cod_Produto = result[i].cod_produto
                     produto = result[i].produto
                     unidades = result[i].unidades
                     preco = result[i].preco
 
                     itensNaComanda.push([cod_Produto,produto,unidades,preco])
-                }
-
-                res.send(itensNaComanda)
+                }/
+                
+                //res.send(itensNaComanda)
             }else{
+                console.log(result)
                 res.send("Nenhum resultado")
             }
-            //console.log(result)
         }
     })
-})
-
+})*/
 //FIM PARTE DA COMANDA
+
+//COMANDA REFATORADA:
+app.post("/buscar-itens-comanda", (req, res) => {
+
+    const venda_id = req.body.venda_id;
+    const loja_id = req.body.loja_id;
+    const comanda = req.body.comanda;
+
+    acessa_Database_Lojas.getConnection((err, conn) => {
+        if (err) {
+            console.log(err);
+            return res.send({ msg: 'Erro conexão' });
+        }
+
+        conn.beginTransaction(err => {
+            if (err) {
+                conn.release();
+                return res.send({ msg: 'Erro transação' });
+            }
+
+            // 1️⃣ Busca estado atual da venda
+            conn.query(`
+                SELECT produto_id, quantidade
+                FROM vendas_itens
+                WHERE venda_id = ?
+            `, [venda_id], (erro, antigos) => {
+
+                if (erro) {
+                    return conn.rollback(() => {
+                        conn.release();
+                        console.log(erro);
+                        res.send({ msg: 'Erro buscar itens antigos' });
+                    });
+                }
+
+                const antigosMap = {};
+                antigos.forEach(i => antigosMap[i.produto_id] = i.quantidade);
+
+                const novosIds = comanda.map(p => p.produto_id);
+
+                let processados = 0;
+
+                const finalizar = () => {
+                    conn.commit(err => {
+                        if (err) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.log(err);
+                                res.send({ msg: 'Erro commit' });
+                            });
+                        }
+                        conn.release();
+                        res.send({ msg: 'Comanda atualizada com sucesso' });
+                    });
+                };
+
+                if (comanda.length === 0) {
+
+                    // Remove tudo se esvaziou a mesa
+                    conn.query(`
+                        DELETE FROM vendas_itens WHERE venda_id = ?
+                    `, [venda_id], erro => {
+
+                        if (erro) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.log(erro);
+                                res.send({ msg: 'Erro limpar comanda' });
+                            });
+                        }
+
+                        return finalizar();
+                    });
+
+                    return;
+                }
+
+                // 2️⃣ Insere ou atualiza cada item
+                comanda.forEach(prod => {
+
+                    const qtdAntiga = antigosMap[prod.produto_id] || 0;
+                    const delta = prod.quantidade - qtdAntiga;
+
+                    const subtotal = prod.quantidade * prod.preco_venda;
+
+                    conn.query(`
+                        INSERT INTO vendas_itens
+                        (venda_id, produto_id, produto_nome, quantidade, preco_venda, preco_compra, subtotal)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                            quantidade = VALUES(quantidade),
+                            subtotal = VALUES(subtotal)
+                    `, [
+                        venda_id,
+                        prod.produto_id,
+                        prod.produto_nome,
+                        prod.quantidade,
+                        prod.preco_venda,
+                        prod.preco_compra,
+                        subtotal
+                    ], erro => {
+
+                        if (erro) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.log(erro);
+                                res.send({ msg: 'Erro salvar item' });
+                            });
+                        }
+
+                        // 3️⃣ Ajusta estoque pelo delta
+                        if (delta !== 0) {
+                            conn.query(`
+                                UPDATE produtos
+                                SET estoque = estoque - ?
+                                WHERE loja_id = ?
+                                AND codigo_produto = ?
+                            `, [delta, loja_id, prod.produto_id], erro => {
+
+                                if (erro) {
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        console.log(erro);
+                                        res.send({ msg: 'Erro atualizar estoque' });
+                                    });
+                                }
+
+                                checarFinalizacao();
+                            });
+
+                        } else {
+                            checarFinalizacao();
+                        }
+                    });
+                });
+
+                // 4️⃣ Remove produtos que saíram da comanda
+                antigos.forEach(old => {
+                    if (!novosIds.includes(old.produto_id)) {
+
+                        conn.query(`
+                            DELETE FROM vendas_itens
+                            WHERE venda_id = ?
+                            AND produto_id = ?
+                        `, [venda_id, old.produto_id], erro => {
+
+                            if (erro) {
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    console.log(erro);
+                                    res.send({ msg: 'Erro remover item' });
+                                });
+                            }
+
+                            // devolve estoque
+                            conn.query(`
+                                UPDATE produtos
+                                SET estoque = estoque + ?
+                                WHERE loja_id = ?
+                                AND codigo_produto = ?
+                            `, [old.quantidade, loja_id, old.produto_id], erro => {
+
+                                if (erro) {
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        console.log(erro);
+                                        res.send({ msg: 'Erro devolver estoque' });
+                                    });
+                                }
+
+                                checarFinalizacao();
+                            });
+                        });
+                    }
+                });
+
+                function checarFinalizacao() {
+                    processados++;
+                    const totalEsperado = comanda.length + antigos.filter(a => !novosIds.includes(a.produto_id)).length;
+                    if (processados === totalEsperado) {
+                        finalizar();
+                    }
+                }
+
+            });
+
+        });
+    });
+});
+
+//FIM COMANDA REFATORADA
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
 app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
