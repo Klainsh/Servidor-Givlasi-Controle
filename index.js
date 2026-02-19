@@ -1048,6 +1048,7 @@ app.post("/buscar-comandas-abertas", (req,res) => {
             console.log(error)
         }else{
             if(result.length > 0){
+            //AO BUSCAR COMANDAS, VOU PRECISAR ENVIAR TAMBÉM O VENDA_ID. PARA QUE O FRONT UTILIZE PARA INSERIR DADOS.
                 res.send(result)
             }else{
                 //console.log("Não tem nenhuma comanda aberta.")a
@@ -1098,7 +1099,7 @@ app.post("/insere-itens-da-comanda", (req,res) => {
     //loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(cod_produto,produto,unidades,preco)`)
 })
 
-/*app.post("/buscar-itens-comanda", (req,res) => {
+app.post("/buscar-itens-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const comanda = req.body.comanda;//identificador
     console.log(`buscou itens da comanda.${id_da_loja} ${comanda}`)
@@ -1122,7 +1123,8 @@ app.post("/insere-itens-da-comanda", (req,res) => {
             console.log(error)
         }else{
             if(result.length > 0){//Caso tenha itens na comanda selecionada.
-                console.log(result)
+                res.send(result)
+                
                 /*for(let i = 0; i< result.length; i++){
                     cod_Produto = result[i].cod_produto
                     produto = result[i].produto
@@ -1130,27 +1132,28 @@ app.post("/insere-itens-da-comanda", (req,res) => {
                     preco = result[i].preco
 
                     itensNaComanda.push([cod_Produto,produto,unidades,preco])
-                }/
+                }*/
                 
                 //res.send(itensNaComanda)
             }else{
-                console.log(result)
                 res.send("Nenhum resultado")
             }
         }
     })
-})*/
+})
 //FIM PARTE DA COMANDA
 
 //COMANDA REFATORADA:
-app.post("/buscar-itens-comanda", (req, res) => {
-
-    const venda_id = req.body.venda_id;
+app.post("/Inserir-itens-comanda", (req, res) => { 
+    console.log("chamou!")
     const loja_id = req.body.loja_id;
-    const comanda = req.body.comanda;
-
+    const venda_id = req.body.venda_id;   
+    const comanda = req.body.comanda; 
+    //const lista_da_comanda = req.body.lista_da_comanda;
+    console.log(`venda id aqui: ${venda_id}`) 
+    console.log(`Itens: ${JSON.stringify(comanda)}`)
     acessa_Database_Lojas.getConnection((err, conn) => {
-        if (err) {
+        if (err) { 
             console.log(err);
             return res.send({ msg: 'Erro conexão' });
         }
@@ -1161,7 +1164,7 @@ app.post("/buscar-itens-comanda", (req, res) => {
                 return res.send({ msg: 'Erro transação' });
             }
 
-            // 1️⃣ Busca estado atual da venda
+            // 1 - Busca estado atual da venda
             conn.query(`
                 SELECT produto_id, quantidade
                 FROM vendas_itens
@@ -1176,6 +1179,7 @@ app.post("/buscar-itens-comanda", (req, res) => {
                     });
                 }
 
+                
                 const antigosMap = {};
                 antigos.forEach(i => antigosMap[i.produto_id] = i.quantidade);
 
@@ -1220,12 +1224,10 @@ app.post("/buscar-itens-comanda", (req, res) => {
 
                 // 2️⃣ Insere ou atualiza cada item
                 comanda.forEach(prod => {
-
                     const qtdAntiga = antigosMap[prod.produto_id] || 0;
                     const delta = prod.quantidade - qtdAntiga;
 
                     const subtotal = prod.quantidade * prod.preco_venda;
-
                     conn.query(`
                         INSERT INTO vendas_itens
                         (venda_id, produto_id, produto_nome, quantidade, preco_venda, preco_compra, subtotal)
@@ -1240,7 +1242,7 @@ app.post("/buscar-itens-comanda", (req, res) => {
                         prod.quantidade,
                         prod.preco_venda,
                         prod.preco_compra,
-                        subtotal
+                        subtotal 
                     ], erro => {
 
                         if (erro) {
@@ -1276,8 +1278,8 @@ app.post("/buscar-itens-comanda", (req, res) => {
                         }
                     });
                 });
-
-                // 4️⃣ Remove produtos que saíram da comanda
+                
+                // Remove produtos que saíram da comanda
                 antigos.forEach(old => {
                     if (!novosIds.includes(old.produto_id)) {
 
@@ -1316,7 +1318,7 @@ app.post("/buscar-itens-comanda", (req, res) => {
                         });
                     }
                 });
-
+                
                 function checarFinalizacao() {
                     processados++;
                     const totalEsperado = comanda.length + antigos.filter(a => !novosIds.includes(a.produto_id)).length;
@@ -1324,7 +1326,7 @@ app.post("/buscar-itens-comanda", (req, res) => {
                         finalizar();
                     }
                 }
-
+                
             });
 
         });
