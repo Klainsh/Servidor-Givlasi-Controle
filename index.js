@@ -762,6 +762,115 @@ app.post("/finalizar-venda", (req,res) => {
     });
 })
 
+//DEPOIS VOU SEPARAR ESSAS "FUNCOES" TUDO QUE ESTÃO DENTRO DELA.
+//O FINALIZAR VENDA POR COMANDA É DIFERENTE!
+app.post("/finalizar-comanda", (req, res) => {
+
+    const loja_id = req.body.loja_id;
+    const venda_id = req.body.venda_id;
+    const identificador = req.body.identificador;
+
+    console.log(`loja_id: ${loja_id} | venda_id: ${venda_id} | identificador: ${identificador}`)
+
+    acessa_Database_Lojas.getConnection((err, conn) => {
+
+        if (err) {
+            console.log(err);
+            return res.send({ msg: 'Erro conexão' });
+        }
+
+        conn.beginTransaction(err => {
+
+            if (err) {
+                conn.release();
+                return res.send({ msg: 'Erro transação' });
+            }
+
+            // 1️⃣ Calcula total e custo baseado nos itens já existentes
+            conn.query(`
+                SELECT 
+                    SUM(subtotal) AS total,
+                    SUM(preco_compra * quantidade) AS custo_total
+                FROM vendas_itens
+                WHERE venda_id = ?
+            `, [venda_id], (erro, resultado) => {
+
+                if (erro) {
+                    return conn.rollback(() => {
+                        conn.release();
+                        console.log(erro);
+                        res.send({ msg: 'Erro calcular totais' });
+                    });
+                }
+
+                const total = resultado[0].total || 0;
+                const custo_total = resultado[0].custo_total || 0;
+
+                // 2️⃣ Atualiza a venda como finalizada
+                conn.query(`
+                    UPDATE vendas
+                    SET 
+                        total = ?,
+                        custo_total = ?,
+                        status = 'fechada',
+                        data_venda = ?,
+                        hora_venda = ?
+                    WHERE id = ?
+                    AND loja_id = ?
+                `, [total, custo_total, dataEhoraSistema(), dataEhoraSistema(), venda_id, loja_id], erro => {
+
+                    if (erro) {
+                        return conn.rollback(() => {
+                            conn.release();
+                            console.log(erro);
+                            res.send({ msg: 'Erro atualizar venda' });
+                        });
+                    }
+
+                    // 3️⃣ Remove da tabela mesas (fecha comanda)
+                    conn.query(`
+                        DELETE FROM mesas
+                        WHERE venda_id = ?
+                        AND loja_id = ?
+                        AND identificador = ?
+                    `, [venda_id, loja_id, identificador], erro => {
+
+                        if (erro) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.log(erro);
+                                res.send({ msg: 'Erro remover mesa' });
+                            });
+                        }
+
+                        // 4️⃣ Commit final
+                        conn.commit(err => {
+
+                            if (err) {
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    console.log(err);
+                                    res.send({ msg: 'Erro commit' });
+                                });
+                            }
+
+                            conn.release();
+                            res.send({ msg: 'Comanda finalizada com sucesso!' });
+
+                        });
+
+                    });
+
+                });
+
+            });
+
+        });
+
+    });
+
+});
+
 //FUNCAO JA REFATORADA.
 app.post("/busca-Vendas-Do-Dia", (req,res) => { 
     const id_da_loja = req.body.id_da_loja;
@@ -1123,18 +1232,7 @@ app.post("/buscar-itens-comanda", (req,res) => {
             console.log(error)
         }else{
             if(result.length > 0){//Caso tenha itens na comanda selecionada.
-                res.send(result)
-                
-                /*for(let i = 0; i< result.length; i++){
-                    cod_Produto = result[i].cod_produto
-                    produto = result[i].produto
-                    unidades = result[i].unidades
-                    preco = result[i].preco
-
-                    itensNaComanda.push([cod_Produto,produto,unidades,preco])
-                }*/
-                
-                //res.send(itensNaComanda)
+                res.send(result)              
             }else{
                 res.send("Nenhum resultado")
             }
@@ -1150,7 +1248,7 @@ app.post("/Inserir-itens-comanda", (req, res) => {
     const venda_id = req.body.venda_id;   
     const comanda = req.body.comanda; 
     //const lista_da_comanda = req.body.lista_da_comanda;
-    console.log(`venda id aqui: ${venda_id}`) 
+    console.log(`venda LOJAid aqui: ${loja_id}`) 
     console.log(`Itens: ${JSON.stringify(comanda)}`)
     acessa_Database_Lojas.getConnection((err, conn) => {
         if (err) { 
