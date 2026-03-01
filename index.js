@@ -8,6 +8,37 @@ const saltRounds = 10;
 
 var email_global = '';
 var id_Da_Loja_Global ='';
+
+//LOGO APÓS LANÇAR A NOVA VERSÃO, IREI INICIAR A REESTRUTURAÇÃO DE TODO O SERVIDOR, ORGANIZADO!!!
+
+/*PARTE DO SOCKET.IO*/
+const http = require("http");
+const { Server } = require("socket.io");
+
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
+
+io.on("connection", (socket) => {
+    console.log("Cliente conectado");
+
+    socket.on("entrar_na_loja", (id_loja) => {
+        socket.join(`loja_${id_loja}`);
+        //console.log("entrou nessa loja")
+    });
+
+    //TRATA ERROS:
+    socket.on("connect_error", (err) => {
+        console.log("Erro na conexão do socket:", err.message);
+    });
+
+    socket.on("disconnect", (reason) => {
+        console.log("Cliente desconectado. Motivo:", reason);
+    });
+});
+
+/*FIM SOCKET.IO*/
     
 const db = mysql.createPool({
     host: "localhost",
@@ -124,7 +155,7 @@ app.post("/testeCadastro", (req, res) => {
 app.post("/cadastro", (req,res) => {
     email_global = req.body.email;//esse email aqui é global, para poder criar o BD da loja na hora que o usuario faz o cadastro.
     const senha = req.body.senha;
-    const email = req.body.email;
+    const email = req.body.email.trim().toLowerCase();
     const nivel = req.body.nivel;
     const cpf = req.body.cpf;
     //O id_da_loja É AUTO INCREMENT NO BANCO DE DADOS!
@@ -1028,7 +1059,7 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
 app.post("/busca-produtos", (req, res) =>{
     const id_da_loja = req.body.id_da_loja;
     listaDosProdutos = []
-
+    console.log(`Buscou esse carai ${id_da_loja}`)
     acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ?`, [id_da_loja], (error, result) => {
         if(error){
             res.send("Erro!")
@@ -1940,6 +1971,6 @@ app.post('/cria-pix', (req,res) => {
 //FIM OPÇÕES DE PAGAMENTOS.
 
 
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`Servidor iniciado na porta: ${port}`)
 });
