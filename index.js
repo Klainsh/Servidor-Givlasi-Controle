@@ -1012,6 +1012,10 @@ app.post("/adicionar-estoque", (req, res) =>{
             console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
         }else{
             res.send("Sucesso!")
+            // Depois que o banco confirma, emite evento
+            io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
+                codigoProduto
+            });
         }
     })
     
