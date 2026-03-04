@@ -1012,10 +1012,28 @@ app.post("/adicionar-estoque", (req, res) =>{
             console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
         }else{
             res.send("Sucesso!")
+            //busca estoque atualizado
+            acessa_Database_Lojas.query(
+                `SELECT estoque FROM produtos
+                WHERE loja_id = ? AND codigo_produto = ?`,
+                [id_da_loja, codigoProduto],
+                (err2, result) => {
+
+                    const estoqueAtual = result[0].estoque;
+
+                    //res.send("Sucesso!");
+
+                    io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
+                        codigoProduto,
+                        estoque: estoqueAtual
+                    });
+                }
+            );
+            /*
             // Depois que o banco confirma, emite evento
             io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
                 codigoProduto
-            });
+            });*/
         }
     })
     
@@ -1037,6 +1055,28 @@ app.post("/remover-estoque", (req, res) =>{
         return res.send("Estoque insuficiente!");
     }else{
         res.send("Sucesso!")
+        //busca estoque atualizado
+        acessa_Database_Lojas.query(
+            `SELECT estoque FROM produtos
+            WHERE loja_id = ? AND codigo_produto = ?`,
+            [id_da_loja, codigoProduto],
+            (err2, result) => {
+
+                const estoqueAtual = result[0].estoque;
+
+                //res.send("Sucesso!");
+
+                io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
+                    codigoProduto,
+                    estoque: estoqueAtual
+                });
+            }
+        );
+        /*
+        // Depois que o banco confirma, emite evento
+        io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
+            codigoProduto
+        });*/
     }
     })
     
