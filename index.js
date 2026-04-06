@@ -272,7 +272,7 @@ app.post("/busca_produtos_vendidos_por_data", (req,res) => {
     
     if(dataDia != undefined && dataMes != undefined && dataAno != undefined){//SE A BUSCA FOR POR DIA, MES E ANO.         
         const dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
-
+ 
         const dataFim = new Date(dataInicio);
         dataFim.setDate(dataFim.getDate() + 1);
         const dataFimFormatada = dataFim.toISOString().slice(0,10);
@@ -297,7 +297,7 @@ app.post("/busca_produtos_vendidos_por_data", (req,res) => {
                 res.status(500).send({msg:"Erro"});
             }else{
                 console.log(result)
-                res.send({msg: result});
+                res.send({msg: result});//MUDAR PARA PASSAR SÓ O RESULT, MAS PRECISO MUDAR COMO OS CLIENT'S RECEBEM. 
             }
         });
 
@@ -782,7 +782,10 @@ app.post("/finalizar-venda", (req,res) => {
                     });
                 }
 
-                conn.release();
+                conn.release(); 
+                //Envio o sinal socket.io
+                io.to(`loja_${id_da_loja}`).emit("finalizou_venda");
+
                 res.send({ msg: 'Sucesso!' });
             });
 
@@ -1022,7 +1025,7 @@ app.post("/adicionar-estoque", (req, res) =>{
                     const estoqueAtual = result[0].estoque;
 
                     //res.send("Sucesso!");
-
+                    //Envio o sinal socket.io
                     io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
                         codigoProduto,
                         estoque: estoqueAtual
