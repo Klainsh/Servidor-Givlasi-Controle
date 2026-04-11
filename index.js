@@ -216,8 +216,8 @@ app.post("/cadastrar-produto", (req,res) => {
     })
 })
 
-//NOVA FUNCAO REFATORADA!
-app.post("/buscar-produto", (req,res) => {
+//NOVA FUNCAO REFATORADA! CUIDADO AO USAR ESSA FUNÇÃO, TENHO OUTRA COM O NOME 'BUSCA_PRODUTOS' QUE É PARA BUSCAR A LISTA DOS MESMOS.
+app.post("/buscar-produto", (req,res) => { 
     const codigoProduto = req.body.codigoProduto;
     const id_da_loja = req.body.id_da_loja;
     const buscaPeloCodigo = req.body.modoDeBusca;//INFORMA SE O SERVIDOR DEVE BUSCAR PELO CÓDIGO OU PELO NOME DO PRODUTO.
@@ -889,6 +889,10 @@ app.post("/finalizar-comanda", (req, res) => {
                             }
 
                             conn.release();
+
+                            //Envio o sinal socket.io
+                            io.to(`loja_${loja_id}`).emit("finalizou_venda");
+
                             res.send({ msg: 'Comanda finalizada com sucesso!' });
 
                         });
@@ -1102,7 +1106,7 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
     })
 })
 
-//FUNCAO JÁ REESTRUTURADA.
+//FUNCAO JÁ REESTRUTURADA. ESSA FUNÇÃO BUSCA TODOS OS PRODUTOS DE VEZ.
 app.post("/busca-produtos", (req, res) =>{
     const id_da_loja = req.body.id_da_loja;
     listaDosProdutos = []
