@@ -234,7 +234,7 @@ app.post("/buscar-produto", (req,res) => {
                     //console.log({ codigo_produto: result[0].codigo_produto, produto: result[0].produto, preco: result[0].valor_de_venda, estoque: result[0].estoque },)
                 }else{
                     res.send({msg:"Nenhum resultado encontrado!"})
-                    console.log("Nenhum resultado encontrado!")
+                    console.log("Nenhum resultado encontrado!")  
                 }  
             }
         })
@@ -797,8 +797,8 @@ app.post("/finalizar-venda", (req,res) => {
 })
 
 //DEPOIS VOU SEPARAR ESSAS "FUNCOES" TUDO QUE ESTÃO DENTRO DELA.
-//O FINALIZAR VENDA POR COMANDA É DIFERENTE!
-app.post("/finalizar-comanda", (req, res) => {
+//O FINALIZAR VENDA POR COMANDA É DIFERENTE! 
+app.post("/finalizar-comanda", (req, res) => { 
 
     const loja_id = req.body.loja_id;
     const venda_id = req.body.venda_id;
@@ -820,7 +820,7 @@ app.post("/finalizar-comanda", (req, res) => {
                 return res.send({ msg: 'Erro transação' });
             }
 
-            // 1️⃣ Calcula total e custo baseado nos itens já existentes
+            // 1️ Calcula total e custo baseado nos itens já existentes
             conn.query(`
                 SELECT 
                     SUM(subtotal) AS total,
@@ -840,7 +840,7 @@ app.post("/finalizar-comanda", (req, res) => {
                 const total = resultado[0].total || 0;
                 const custo_total = resultado[0].custo_total || 0;
 
-                // 2️⃣ Atualiza a venda como finalizada
+                // 2️ Atualiza a venda como finalizada
                 conn.query(`
                     UPDATE vendas
                     SET 
@@ -861,7 +861,7 @@ app.post("/finalizar-comanda", (req, res) => {
                         });
                     }
 
-                    // 3️⃣ Remove da tabela mesas (fecha comanda)
+                    // 3️ Remove da tabela mesas (fecha comanda)
                     conn.query(`
                         DELETE FROM mesas
                         WHERE venda_id = ?
@@ -877,7 +877,7 @@ app.post("/finalizar-comanda", (req, res) => {
                             });
                         }
 
-                        // 4️⃣ Commit final
+                        // 4️ Commit final
                         conn.commit(err => {
 
                             if (err) {
@@ -1006,7 +1006,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
 })
 
 //FUNCAO REFATORADA.
-app.post("/adicionar-estoque", (req, res) =>{
+app.post("/adicionar-estoque", (req, res) =>{ 
     const id_da_loja = req.body.id_da_loja;
     const codigoProduto = req.body.codigoProduto;
     const novoEstoque = req.body.novoEstoque;
@@ -1225,7 +1225,7 @@ app.post("/excluir-comanda", (req, res) => {
 
 app.post("/buscar-comandas-abertas", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
-    const novaComanda = req.body.novaComanda;
+    //const novaComanda = req.body.novaComanda;
 
     acessa_Database_Lojas.query(`SELECT 
                                 m.id,
@@ -1514,6 +1514,32 @@ app.post("/Inserir-itens-comanda", (req, res) => {
 });
 
 //FIM COMANDA REFATORADA
+
+/*
+    FUNÇÃO USADA APENAS NO GIVLASI CONTROLE DESKTOP
+    TENHO UMA FUNCAO CHAMADA codigo_produto() QUE R-
+    ETORNA O CÓDIGO DO PRODUTO. (AO BUSCAR UM PRODU-
+    TO PELO NOME O APP TAMBÉM PRECISA DO CÓDIGO DELE).
+*/
+app.post("/pega-codigo-produto", (req,res) => {
+    const loja_id = req.body.loja_id;
+    const nome_Do_Produto = req.body.nome_Do_Produto;
+    console.log(`PEGOU O CODIGO DO PRODUTO PELO NOME. ${loja_id} & ${nome_Do_Produto}`)
+
+    acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ? AND nome = ?`, [loja_id, nome_Do_Produto] ,(error, result) => {
+        if(error){
+            console.log(`Erro: ${error}`)
+            res.send({msg:"Erro"})
+        }if(result.length > 0){
+            /* AQUI RETORNO O CÓDIGO DO PRODUTO QUE FOI SELECIONADO PELO NOME. */
+            console.log(`RESULTADO DO PEGO-CODIGO-PRODUTO: ${result}`)
+            res.send({msg:result})
+        }else{
+            res.send({msg:"Erro"})//NENHUM PRODUTO ENCONTRADO COM ESSE NOME.
+        }
+        console.log(result)
+    })
+});
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
 app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
