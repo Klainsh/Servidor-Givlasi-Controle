@@ -1515,6 +1515,7 @@ app.post("/Inserir-itens-comanda", (req, res) => {
 
 //FIM COMANDA REFATORADA
 
+//FUNCOES INICIALMENTE USADAS APENAS NA VERSÃO DESKTOP.
 /*
     FUNÇÃO USADA APENAS NO GIVLASI CONTROLE DESKTOP
     TENHO UMA FUNCAO CHAMADA codigo_produto() QUE R-
@@ -1524,7 +1525,7 @@ app.post("/Inserir-itens-comanda", (req, res) => {
 app.post("/pega-codigo-produto", (req,res) => {
     const loja_id = req.body.loja_id;
     const nome_Do_Produto = req.body.nome_Do_Produto;
-    console.log(`PEGOU O CODIGO DO PRODUTO PELO NOME. ${loja_id} & ${nome_Do_Produto}`)
+    //console.log(`PEGOU O CODIGO DO PRODUTO PELO NOME. ${loja_id} & ${nome_Do_Produto}`)
 
     acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ? AND nome = ?`, [loja_id, nome_Do_Produto] ,(error, result) => {
         if(error){
@@ -1540,6 +1541,35 @@ app.post("/pega-codigo-produto", (req,res) => {
         console.log(result)
     })
 });
+
+//FUNÇÃO USADA PARA A TELA DE VENDAS RÁPIDA.
+/*NA TELA DE VENDAS POR COMANDA, O SERVIDOR JÁ ENVIA O venda_id PARA O FRONT,
+  MAS PARA A TELA DE VENDAS RÁPIDA PRECISEI ADAPTAR ALGO.
+*/
+app.post("/pega-venda-id", (req,res) => {
+    const loja_id = req.body.loja_id; 
+    const comanda = req.body.comanda; 
+    console.log(`PEGOU O VENDA_ID. ${loja_id} & ${comanda}`)
+    
+    acessa_Database_Lojas.query(`SELECT venda_id FROM mesas WHERE loja_id = ? AND identificador = ?`, [loja_id, comanda] ,(error, result) => {
+        if(error){  
+            console.log(`Erro: ${error}`)
+            res.send({msg: "Erro"})
+        }if(result.length > 0){ 
+            /* AQUI RETORNO O venda_id DA COMANDA ABERTA. */
+            console.log(`RESULTADO DO PEGA-VENDA-ID: ${result[0].venda_id}`) 
+            const venda_id = result[0].venda_id;
+            res.send({msg: venda_id})
+        }else{
+            res.send({msg: "Erro"})//NENHUM PRODUTO ENCONTRADO COM ESSE NOME.
+        }
+
+        const venda_id = result[0].venda_id;
+        res.send({msg: venda_id})
+    })
+})
+
+//FIM DAS FUNCOES INICIALMENTE USADAS APENAS NA VERSÃO DESKTOP.
 
 //Se eu mudar o valor aqui, automaticamente já é repassado para os clientes no front.
 app.get('/planos', (req,res) => {//Preço dos planos 156,15/ 290
