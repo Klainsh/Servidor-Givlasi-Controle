@@ -20,6 +20,7 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
+/* VERSÃO ANTIGA:
 io.on("connection", (socket) => {
     console.log("Cliente conectado");
 
@@ -35,6 +36,92 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", (reason) => {
         console.log("Cliente desconectado. Motivo:", reason);
+    });
+});
+
+*/
+//NOVA VERSÃO:
+/*  ATUALIZADA PARA REGISTRAR OS DADOS DOS DISPOSITIVOS 
+                    & 
+    CRIAR EVENTOS DE COMUNICAÇÃO DIRETA 
+*/
+// Objeto na memória do servidor para saber quem é quem por loja
+const caixasAtivos = {}; 
+
+io.on("connection", (socket) => {
+    console.log("Cliente conectado:", socket.id);
+    // Agora recebemos um objeto com mais detalhes
+    socket.on("entrar_na_loja", (dados) => {
+        //console.log("==> DADOS RECEBIDOS DO FRONTEND:", dados);
+        const { id_loja, id_usuario, tipo } = dados; // tipo: 'desktop' ou 'mobile'
+        
+        socket.join(`loja_${id_loja}`);
+        socket.id_loja = id_loja;
+        socket.id_usuario = id_usuario;
+        socket.tipo = tipo;
+
+        // Se for um computador, registramos que este caixa está online
+        if (tipo === 'desktop') {
+            if (!caixasAtivos[id_loja]) caixasAtivos[id_loja] = {};
+            caixasAtivos[id_loja][id_usuario] = socket.id;
+            console.log(`Desktop do usuario ${id_usuario} pronto na loja ${id_loja}`);
+        }
+    });
+
+    // 1º GATILHO: Mobile pede os dados da venda rápida
+    socket.on("solicitar_itens_venda", (dados) => {
+        const { id_loja, id_usuario } = dados;
+        
+        // Procura se o computador desse usuário está online
+        const socketIdDesktop = caixasAtivos[id_loja]?.[id_usuario];
+
+        if (socketIdDesktop) {
+            // Envia o pedido DIRETAMENTE para o socket do Desktop correspondente
+            io.to(socketIdDesktop).emit("desktop_enviar_itens", { socket_mobile_id: socket.id });
+        } else {
+            // Se o PC não for encontrado, avisa o celular na hora
+            socket.emit("venda_dados_resposta", { status: "OFFLINE", itens: [] });
+        }
+    });
+
+    // 2º GATILHO: Desktop responde com os itens e o servidor repassa ao celular
+    socket.on("desktop_respondeu_itens", (dados) => {
+        const { socket_mobile_id, status, itens } = dados;
+        
+        // Repassa a lista de itens puramente para o socket do celular que pediu
+        io.to(socket_mobile_id).emit("venda_dados_resposta", { status, itens });
+    });
+
+    // Limpeza de cache ao desconectar
+    socket.on("disconnect", () => {
+        if (socket.tipo === "desktop" && caixasAtivos[socket.id_loja]) {
+            delete caixasAtivos[socket.id_loja][socket.id_usuario];
+        }
+        console.log("Cliente desconectado:", socket.id);
+    });
+
+
+    // BUSCA TODAS AS CONEXÕES ATIVAS DO SERVIDOR:
+    socket.on("listar_todos_usuarios_globais", () => {
+        console.log("-> SERVIDOR RECEBEU O COMANDO DO JAVA!");
+
+        // 1. Obtém o mapa real de sockets ativos na memória local do Node.js
+        const todosOsSocketsNativos = io.sockets.sockets;
+        
+        console.log(`\n=== RELATÓRIO GLOBAL: ${todosOsSocketsNativos.size} CONEXÕES ATIVAS NO SOCKET ===`);
+        
+        // 2. Iteramos sobre o mapa nativo. O "s" aqui é a instância real do Socket.
+        todosOsSocketsNativos.forEach((s) => {
+            
+            // Verifica se as propriedades injetadas na raiz existem neste socket específico
+            if (s.id_loja) {
+                console.log(`> Loja: ${s.id_loja} | Usuário: ${s.id_usuario} | Dispositivo: ${s.tipo?.toUpperCase()} | SocketID: ${s.id}`);
+            } else {
+                console.log(`> Dispositivo conectado mas ainda não identificado/autenticado (SocketID: ${s.id})`);
+            }
+        });
+        
+        console.log("===================================================\n");
     });
 });
 
@@ -1292,7 +1379,7 @@ app.post("/insere-itens-da-comanda", (req,res) => {
 
 app.post("/buscar-itens-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
-    const comanda = req.body.comanda;//identificador
+    const comanda = req.body.comanda;//identificador 
     console.log(`buscou itens da comanda.${id_da_loja} ${comanda}`)
 
     let itensNaComanda = []
@@ -1314,6 +1401,7 @@ app.post("/buscar-itens-comanda", (req,res) => {
             console.log(error)
         }else{
             if(result.length > 0){//Caso tenha itens na comanda selecionada.
+                console.log(`RESULTADO DA BUSCA ITENS COMANDA: ${result[0].produto_nome}`)
                 res.send(result)              
             }else{
                 res.send("Nenhum resultado")
@@ -1324,14 +1412,14 @@ app.post("/buscar-itens-comanda", (req,res) => {
 //FIM PARTE DA COMANDA
 
 //COMANDA REFATORADA:
-app.post("/Inserir-itens-comanda", (req, res) => { 
-    console.log("chamou!")
+app.post("/Inserir-itens-comanda", (req, res) => {   
     const loja_id = req.body.loja_id;
     const venda_id = req.body.venda_id;   
-    const comanda = req.body.comanda; 
+    const comanda = req.body.comanda;   
     //const lista_da_comanda = req.body.lista_da_comanda;
-    console.log(`venda LOJAid aqui: ${loja_id}`) 
-    console.log(`Itens: ${JSON.stringify(comanda)}`)
+    //console.log(`venda LOJAid aqui: ${loja_id}`) 
+    //console.log(`venda_id: ${venda_id}`) 
+    //console.log(`Itens: ${JSON.stringify(comanda)}`) //TEORICAMENTE O SERVIDOR TÁ RECEBENDO OS PRODUTOS NORMALMENTE.
     acessa_Database_Lojas.getConnection((err, conn) => {
         if (err) { 
             console.log(err);
@@ -1513,6 +1601,41 @@ app.post("/Inserir-itens-comanda", (req, res) => {
     });
 });
 
+/*FUNCAO UTILIZADA NO MOBILE AO ABRIR A TELA DE VENDAS RÁPIDA. */
+app.post("/verifica-comanda-aberta", (req, res) => {
+
+    const id_da_loja = req.body.id_da_loja;
+    const comanda = req.body.comanda;//identificador 
+    console.log(`buscou itens da comanda.${id_da_loja} ${comanda}`)
+
+    let itensNaComanda = []
+
+    acessa_Database_Lojas.query(`SELECT 
+                                vi.id,
+                                vi.produto_id,
+                                vi.produto_nome,
+                                vi.quantidade,
+                                vi.preco_venda,
+                                vi.preco_compra,
+                                vi.subtotal
+                                FROM mesas m
+                                JOIN vendas_itens vi ON vi.venda_id = m.venda_id
+                                WHERE m.loja_id = ?
+                                AND m.identificador = ?
+        `,[id_da_loja, comanda],(error, result) => {
+        if(error){
+            console.log(error)
+        }else{
+            if(result.length > 0){//Caso tenha itens na comanda selecionada.
+                console.log(`RESULTADO DA BUSCA ITENS COMANDA: ${result[0].produto_nome}`)
+                res.send(result)              
+            }else{
+                res.send("Nenhum resultado")
+            }
+        }
+    })
+})
+
 //FIM COMANDA REFATORADA
 
 //FUNCOES INICIALMENTE USADAS APENAS NA VERSÃO DESKTOP.
@@ -1563,9 +1686,6 @@ app.post("/pega-venda-id", (req,res) => {
         }else{
             res.send({msg: "Erro"})//NENHUM PRODUTO ENCONTRADO COM ESSE NOME.
         }
-
-        const venda_id = result[0].venda_id;
-        res.send({msg: venda_id})
     })
 })
 
