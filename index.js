@@ -70,6 +70,7 @@ io.on("connection", (socket) => {
 
     // 1º GATILHO: Mobile pede os dados da venda rápida
     socket.on("solicitar_itens_venda", (dados) => {
+        console.log("CELULAR SOLICITOU")
         const { id_loja, id_usuario } = dados;
         
         // Procura se o computador desse usuário está online
