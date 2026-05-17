@@ -72,15 +72,21 @@ io.on("connection", (socket) => {
     socket.on("solicitar_itens_venda", (dados) => {
         console.log("CELULAR SOLICITOU")
         const { id_loja, id_usuario } = dados;
-        
         // Procura se o computador desse usuário está online
-        const socketIdDesktop = caixasAtivos[id_loja]?.[id_usuario];
+        //const socketIdDesktop = caixasAtivos[id_loja]?.[id_usuario];
 
+        // Converte o id_usuario para minúsculo antes de procurar
+        const lojaStr = String(id_loja);
+        const usuarioMinusculo = id_usuario?.toLowerCase();
+        const socketIdDesktop = caixasAtivos["139"]?.["Xablau5@hotmail.com"];
+        console.log(`idLoja: ${id_loja} | idUsuario: ${id_usuario} |socketIdDesktop: ${socketIdDesktop} | caixasAtivos: ${JSON.stringify(caixasAtivos, null, 2)}`)
+        
         if (socketIdDesktop) {
             // Envia o pedido DIRETAMENTE para o socket do Desktop correspondente
             io.to(socketIdDesktop).emit("desktop_enviar_itens", { socket_mobile_id: socket.id });
         } else {
             // Se o PC não for encontrado, avisa o celular na hora
+            console.log("chegou aqui, erro!")
             socket.emit("venda_dados_resposta", { status: "OFFLINE", itens: [] });
         }
     });
