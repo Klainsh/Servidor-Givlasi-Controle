@@ -54,17 +54,18 @@ io.on("connection", (socket) => {
     socket.on("entrar_na_loja", (dados) => {
         //console.log("==> DADOS RECEBIDOS DO FRONTEND:", dados);
         const { id_loja, id_usuario, tipo } = dados; // tipo: 'desktop' ou 'mobile'
-        
+        const id_usuarioMinusculo = String(id_usuario?.toLowerCase());
+
         socket.join(`loja_${id_loja}`);
         socket.id_loja = id_loja;
-        socket.id_usuario = id_usuario;
+        socket.id_usuario = id_usuarioMinusculo;
         socket.tipo = tipo;
 
         // Se for um computador, registramos que este caixa está online
         if (tipo === 'desktop') {
             if (!caixasAtivos[id_loja]) caixasAtivos[id_loja] = {};
-            caixasAtivos[id_loja][id_usuario] = socket.id;
-            console.log(`Desktop do usuario ${id_usuario} pronto na loja ${id_loja}`);
+            caixasAtivos[id_loja][id_usuarioMinusculo] = socket.id;
+            console.log(`Desktop do usuario ${id_usuarioMinusculo} pronto na loja ${id_loja}`);
         }
     });
 
@@ -76,10 +77,9 @@ io.on("connection", (socket) => {
         //const socketIdDesktop = caixasAtivos[id_loja]?.[id_usuario];
 
         // Converte o id_usuario para minúsculo antes de procurar
-        const lojaStr = String(id_loja);
-        const usuarioMinusculo = id_usuario?.toLowerCase();
-        const socketIdDesktop = caixasAtivos["139"]?.["Xablau5@hotmail.com"];
-        console.log(`idLoja: ${id_loja} | idUsuario: ${id_usuario} |socketIdDesktop: ${socketIdDesktop} | caixasAtivos: ${JSON.stringify(caixasAtivos, null, 2)}`)
+        const usuarioMinusculo = String(id_usuario?.toLowerCase());
+        const socketIdDesktop = caixasAtivos[id_loja]?.[usuarioMinusculo];
+        console.log(`idLoja: ${id_loja} | idUsuario: ${usuarioMinusculo} |socketIdDesktop: ${socketIdDesktop} | caixasAtivos: ${JSON.stringify(caixasAtivos, null, 2)}`)
         
         if (socketIdDesktop) {
             // Envia o pedido DIRETAMENTE para o socket do Desktop correspondente
