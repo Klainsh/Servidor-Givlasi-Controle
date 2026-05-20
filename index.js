@@ -99,6 +99,23 @@ io.on("connection", (socket) => {
         io.to(socket_mobile_id).emit("venda_dados_resposta", { status, itens });
     });
 
+    // 3º GATILHO: Desktop avisa que a JTable mudou em tempo real
+    socket.on("desktop_atualizou_venda", (dados) => {
+        const { id_loja, id_usuario, itens } = dados;
+        const usuarioMinusculo = String(id_usuario?.toLowerCase());
+        
+        console.log(`> Caixa ${usuarioMinusculo} da Loja ${id_loja} alterou o carrinho. Transmitindo...`);
+
+        // Transmite para todos os celulares conectados na sala desta loja
+        // O celular que estiver aberto na venda desse usuário vai capturar o JSON
+        socket.to(`loja_${id_loja}`).emit("venda_atualizada_pelo_desktop", {
+            status: "SUCESSO",
+            id_usuario: usuarioMinusculo, // Enviamos para o celular checar se o ID bate com a sessão dele
+            itens: itens
+        });
+    });
+
+
     // Limpeza de cache ao desconectar
     socket.on("disconnect", () => {
         if (socket.tipo === "desktop" && caixasAtivos[socket.id_loja]) {
