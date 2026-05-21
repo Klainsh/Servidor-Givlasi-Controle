@@ -115,6 +115,25 @@ io.on("connection", (socket) => {
         });
     });
 
+    // 4º GATILHO: Mobile avisa que alterou os itens e o servidor repassa ao Desktop
+    socket.on("mobile_atualizou_venda", (dados) => {
+        const { id_loja, id_usuario, itens } = dados;
+        const usuarioMinusculo = String(id_usuario?.toLowerCase());
+
+        // Localiza o ID do socket do Desktop associado a esse usuário
+        const socketIdDesktop = caixasAtivos[id_loja]?.[usuarioMinusculo];
+
+        console.log(`> Celular de ${usuarioMinusculo} atualizou a venda. Repassando ao Desktop...`);
+
+        if (socketIdDesktop) {
+            // Envia os novos itens direto para o computador correspondente
+            io.to(socketIdDesktop).emit("desktop_receber_atualizacao_mobile", { itens });
+        } else {
+            console.log(`> Computador de ${usuarioMinusculo} não encontrado para receber a atualização.`);
+        }
+    });
+
+
 
     // Limpeza de cache ao desconectar
     socket.on("disconnect", () => {
