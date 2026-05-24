@@ -935,7 +935,7 @@ app.post("/finalizar-comanda", (req, res) => {
     const identificador = req.body.identificador;
 
     console.log(`loja_id: ${loja_id} | venda_id: ${venda_id} | identificador: ${identificador}`)
-
+ 
     acessa_Database_Lojas.getConnection((err, conn) => {
 
         if (err) {
@@ -1460,7 +1460,7 @@ app.post("/Inserir-itens-comanda", (req, res) => {
     const venda_id = req.body.venda_id;   
     const comanda = req.body.comanda;   
     //const lista_da_comanda = req.body.lista_da_comanda;
-    //console.log(`venda LOJAid aqui: ${loja_id}`) 
+    console.log(`INSERINDO ITENS NA COMANDA DA LOJA: ${loja_id}`) 
     //console.log(`venda_id: ${venda_id}`) 
     //console.log(`Itens: ${JSON.stringify(comanda)}`) //TEORICAMENTE O SERVIDOR TÁ RECEBENDO OS PRODUTOS NORMALMENTE.
     acessa_Database_Lojas.getConnection((err, conn) => {
@@ -1715,7 +1715,7 @@ app.post("/pega-codigo-produto", (req,res) => {
 app.post("/pega-venda-id", (req,res) => {
     const loja_id = req.body.loja_id; 
     const comanda = req.body.comanda; 
-    console.log(`PEGOU O VENDA_ID. ${loja_id} & ${comanda}`)
+    console.log(`PEGOU O VENDA_ID. ${loja_id} & ${comanda}`) 
     
     acessa_Database_Lojas.query(`SELECT venda_id FROM mesas WHERE loja_id = ? AND identificador = ?`, [loja_id, comanda] ,(error, result) => {
         if(error){  
@@ -1723,11 +1723,11 @@ app.post("/pega-venda-id", (req,res) => {
             res.send({msg: "Erro"})
         }if(result.length > 0){ 
             /* AQUI RETORNO O venda_id DA COMANDA ABERTA. */
-            console.log(`RESULTADO DO PEGA-VENDA-ID: ${result[0].venda_id}`) 
+            console.log(`RESULTADO DO PEGA-VENDA-ID: ${result[0].venda_id}`)  
             const venda_id = result[0].venda_id;
             res.send({msg: venda_id})
         }else{
-            res.send({msg: "Erro"})//NENHUM PRODUTO ENCONTRADO COM ESSE NOME.
+            res.send({msg: "Erro"})//NENHUMA COMANDA ENCONTRADA COM ESSE NOME.
         }
     })
 })
