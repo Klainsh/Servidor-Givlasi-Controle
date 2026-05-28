@@ -56,7 +56,12 @@ io.on("connection", (socket) => {
         const { id_loja, id_usuario, tipo } = dados; // tipo: 'desktop' ou 'mobile'
         const id_usuarioMinusculo = String(id_usuario?.toLowerCase());
 
+        // 1. Entra na sala global da loja (para estoque, faturamento, etc.)
         socket.join(`loja_${id_loja}`);
+
+        // 2. NOVA SALA PRIVADA: Entra na sala exclusiva do usuário nesta loja
+        socket.join(`loja_${id_loja}_usuario_${id_usuarioMinusculo}`);
+
         socket.id_loja = id_loja;
         socket.id_usuario = id_usuarioMinusculo;
         socket.tipo = tipo;
@@ -67,6 +72,27 @@ io.on("connection", (socket) => {
             caixasAtivos[id_loja][id_usuarioMinusculo] = socket.id;
             console.log(`Desktop do usuario ${id_usuarioMinusculo} pronto na loja ${id_loja}`);
         }
+    });
+
+    // NOVO GATILHO: Disparado ao finalizar uma venda (por celular ou computador)
+    socket.on("venda_finalizada_sucesso", (dados) => {
+        const { id_loja, id_usuario, numero_comanda, dados_painel_global } = dados;
+        const usuarioMinusculo = String(id_usuario?.toLowerCase());
+
+        console.log(`> Venda finalizada: Loja ${id_loja} | Caixa: ${usuarioMinusculo} | Comanda: ${numero_comanda}`);
+
+        // CANAL 1: PRIVADO - Envia o comando de fechar a tela APENAS para quem está na sala do usuário
+        // Usamos socket.to() para enviar para o "par", evitando que o próprio emissor receba de volta se ele já limpou a tela localmente
+        socket.to(`loja_${id_loja}_usuario_${usuarioMinusculo}`).emit("comando_limpar_tela_venda", {
+            numero_comanda: numero_comanda
+        });
+
+        // CANAL 2: GLOBAL - Notifica a loja INTEIRA para atualizar estoques e faturamentos em tempo real
+        /*
+        io.to(`loja_${id_loja}`).emit("painel_loja_atualizar_dados", {
+            tipo: "ATUALIZACAO_FLUXO",
+            dados: dados_painel_global // Ex: { total_venda: 150.00, produtos_abaixados: [...] }
+        });*/
     });
 
     // 1º GATILHO: Mobile pede os dados da venda rápida
@@ -133,8 +159,6 @@ io.on("connection", (socket) => {
         }
     });
 
-
-
     // Limpeza de cache ao desconectar
     socket.on("disconnect", () => {
         if (socket.tipo === "desktop" && caixasAtivos[socket.id_loja]) {
@@ -166,9 +190,46 @@ io.on("connection", (socket) => {
         
         console.log("===================================================\n");
     });
+
+    socket.on("listar_todas_salas", () => {
+        console.log("-> SERVIDOR RECEBEU O COMANDO PARA LISTAR SALAS!");
+
+        // 1. Obtém o mapa de todas as salas e o mapa de todos os sockets conectados
+        const salas = io.sockets.adapter.rooms;
+        const todosOsSocketsNativos = io.sockets.sockets;
+
+        console.log("\n================ RELATÓRIO DE SALAS ================");
+
+        salas.forEach((setDeSockets, nomeDaSala) => {
+            // Filtra para não listar a sala individual automática do próprio socket
+            if (!todosOsSocketsNativos.has(nomeDaSala)) {
+                
+                const totalConectados = setDeSockets.size;
+                console.log(`\nSala: [ ${nomeDaSala} ] | Total de Sockets: ${totalConectados}`);
+
+                // 2. Iteramos sobre cada ID de socket dentro desta sala específica
+                setDeSockets.forEach((socketId) => {
+                    const s = todosOsSocketsNativos.get(socketId);
+                    
+                    if (s) {
+                        if (s.id_loja) {
+                            console.log(`  > Loja: ${s.id_loja} | Usuário: ${s.id_usuario} | Dispositivo: ${s.tipo?.toUpperCase()} | SocketID: ${s.id}`);
+                        } else {
+                            console.log(`  > Dispositivo não identificado (SocketID: ${s.id})`);
+                        }
+                    }
+                });
+            }
+        });
+
+        console.log("\n===================================================\n");
+    });
+    /*FIM SOCKET.IO*/
+
 });
 
-/*FIM SOCKET.IO*/
+
+
     
 const db = mysql.createPool({
     host: "localhost",
@@ -934,6 +995,9 @@ app.post("/finalizar-comanda", (req, res) => {
     const venda_id = req.body.venda_id;
     const identificador = req.body.identificador;
 
+    const id_usuario = req.body.id_usuario;
+    const id_usuarioMinusculo = String(id_usuario?.toLowerCase());
+
     console.log(`loja_id: ${loja_id} | venda_id: ${venda_id} | identificador: ${identificador}`)
  
     acessa_Database_Lojas.getConnection((err, conn) => {
@@ -971,7 +1035,7 @@ app.post("/finalizar-comanda", (req, res) => {
                 const custo_total = resultado[0].custo_total || 0;
 
                 // 2️ Atualiza a venda como finalizada
-                conn.query(`
+                conn.query(` 
                     UPDATE vendas
                     SET 
                         total = ?,
@@ -1019,10 +1083,29 @@ app.post("/finalizar-comanda", (req, res) => {
                             }
 
                             conn.release();
-
+ 
+                            /*
+                            AO FINALIZAR A VENDA AQUI, VERIFICO SE A COMANDA DESSA VENDA ESTÁ ABERTA NO OUTRO
+                            COMPUTADOR/CELULAR, SE TIVER COM ESSA COMANDA EM USO, EU FECHO A TELA, PARA QUE 
+                            NÃO TENHA UMA TELA DESATUALIZADA NO OUTRO.
+                            posso passar o identificador, para que o pc/celular ao receber a notificacao
+                            verifique se está com a comanda aberta e se tiver, fechar
+                             */
+                            //vou criar outro io.to que vai passar a loja e o identificador, para repassar ao finalizar
+                            //no front, se o id e o identificador bater com o que o usuario está utilizando na tela de vendas
+                            //eu fecho/limpo ela lá
                             //Envio o sinal socket.io
+                            //passo o identificador, para o front verificar.
+                            // 1. CANAL PRIVADO: Limpa a tela APENAS do computador e celular desse usuário
+                            // Enviamos para a sala do usuário. Quem estiver nela e com essa comanda aberta vai fechar a tela.
+                            io.to(`loja_${loja_id}_usuario_${id_usuarioMinusculo}`).emit("comando_limpar_tela_venda", {
+                                identificador: id_usuarioMinusculo
+                            });//utilizado na tela de venda rápida 
+ 
+                            //-------------------------- UTILIZADA PARA TODOS OS USUÁRIOS DA LOJA --------------------------
                             io.to(`loja_${loja_id}`).emit("finalizou_venda");
 
+                            
                             res.send({ msg: 'Comanda finalizada com sucesso!' });
 
                         });
