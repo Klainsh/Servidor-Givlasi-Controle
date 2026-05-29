@@ -112,7 +112,7 @@ io.on("connection", (socket) => {
             io.to(socketIdDesktop).emit("desktop_enviar_itens", { socket_mobile_id: socket.id });
         } else {
             // Se o PC não for encontrado, avisa o celular na hora
-            console.log("chegou aqui, erro!")
+            console.log("chegou aqui, Computador não foi encontrado!")
             socket.emit("venda_dados_resposta", { status: "OFFLINE", itens: [] });
         }
     });
@@ -992,7 +992,7 @@ app.post("/finalizar-venda", (req,res) => {
 app.post("/finalizar-comanda", (req, res) => { 
 
     const loja_id = req.body.loja_id;
-    const venda_id = req.body.venda_id;
+    const venda_id = req.body.venda_id; 
     const identificador = req.body.identificador;
 
     const id_usuario = req.body.id_usuario;
@@ -1539,11 +1539,11 @@ app.post("/buscar-itens-comanda", (req,res) => {
 
 //COMANDA REFATORADA:
 app.post("/Inserir-itens-comanda", (req, res) => {   
-    const loja_id = req.body.loja_id;
+    const loja_id = req.body.loja_id; 
     const venda_id = req.body.venda_id;   
     const comanda = req.body.comanda;   
-    //const lista_da_comanda = req.body.lista_da_comanda;
-    console.log(`INSERINDO ITENS NA COMANDA DA LOJA: ${loja_id}`) 
+    //const lista_da_comanda = req.body.lista_da_comanda; 
+    console.log(`INSERINDO ITENS NA COMANDA DA LOJA: ${loja_id}| venda_id: ${venda_id} | comanda: ${comanda}`) 
     //console.log(`venda_id: ${venda_id}`) 
     //console.log(`Itens: ${JSON.stringify(comanda)}`) //TEORICAMENTE O SERVIDOR TÁ RECEBENDO OS PRODUTOS NORMALMENTE.
     acessa_Database_Lojas.getConnection((err, conn) => {
@@ -1795,10 +1795,10 @@ app.post("/pega-codigo-produto", (req,res) => {
 /*NA TELA DE VENDAS POR COMANDA, O SERVIDOR JÁ ENVIA O venda_id PARA O FRONT,
   MAS PARA A TELA DE VENDAS RÁPIDA PRECISEI ADAPTAR ALGO.
 */
-app.post("/pega-venda-id", (req,res) => {
+app.post("/pega-venda-id", (req,res) => { 
     const loja_id = req.body.loja_id; 
     const comanda = req.body.comanda; 
-    console.log(`PEGOU O VENDA_ID. ${loja_id} & ${comanda}`) 
+    console.log(`PEGOU O VENDA_ID. ${loja_id} & ${comanda}`)   
     
     acessa_Database_Lojas.query(`SELECT venda_id FROM mesas WHERE loja_id = ? AND identificador = ?`, [loja_id, comanda] ,(error, result) => {
         if(error){  
