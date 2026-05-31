@@ -49,9 +49,9 @@ io.on("connection", (socket) => {
 const caixasAtivos = {}; 
 
 io.on("connection", (socket) => {
-    console.log("Cliente conectado:", socket.id);
+    console.log("Cliente conectado:", socket.id); 
     // Agora recebemos um objeto com mais detalhes
-    socket.on("entrar_na_loja", (dados) => {
+    socket.on("entrar_na_loja", (dados) => { 
         //console.log("==> DADOS RECEBIDOS DO FRONTEND:", dados);
         const { id_loja, id_usuario, tipo } = dados; // tipo: 'desktop' ou 'mobile'
         const id_usuarioMinusculo = String(id_usuario?.toLowerCase());
