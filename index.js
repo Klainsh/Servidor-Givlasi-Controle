@@ -1255,8 +1255,7 @@ app.post("/adicionar-estoque", (req, res) =>{
                 codigoProduto
             });*/
         }
-    })
-    
+    })   
 })
 
 app.post("/remover-estoque", (req, res) =>{
@@ -1301,6 +1300,27 @@ app.post("/remover-estoque", (req, res) =>{
     })
     
 })
+
+app.post("/deletar-produto", (req, res) =>{
+    const id_da_loja = req.body.id_da_loja;
+    const codigoProduto = req.body.codigoProduto;
+
+    acessa_Database_Lojas.query(`DELETE FROM produtos WHERE loja_id = ? AND codigo_produto = ?`,
+                            [id_da_loja, codigoProduto], (error, result) => {
+        if(error){
+            console.log(`Erro ao tentar alterar o estoque da loja: ${id_da_loja}. Erro: ${error}`)
+            return res.send("Erro!");
+        }else if(result.affectedRows === 0) {
+            // Estoque insuficiente
+            return res.send("Produto não encontrado!");
+        }else{
+            res.send("Sucesso!")
+            //AQUI EU ENVIO O SOCKET QUE FALA QUE UM PRODUTO FOI REMOVIDO.
+        }
+    })
+    
+})
+
 
 app.post("/alterar-valor-compra-e-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
@@ -2308,7 +2328,7 @@ app.post('/cria-pix', (req,res) => {
 
     //Step 6: Make the request
     //payment.create({ body, requestOptions }).then(console.log).catch(console.log);
-    payment.create({ body, requestOptions })
+    payment.create({ body, requestOptions }) 
     .then(response => {
         console.log('Resultado da transação:', response);
         res.send(response)//Envio a resposta pro client para pegar o link do pix.
