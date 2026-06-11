@@ -5,6 +5,7 @@ const mysql = require("mysql");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
+const rateLimit = require("express-rate-limit");
 
 var email_global = '';
 var id_Da_Loja_Global ='';
@@ -16,30 +17,23 @@ const http = require("http");
 const { Server } = require("socket.io");
 
 const server = http.createServer(app);
+//CONFIGURAÇÃO DO SOCKET.IO (Fica isolada do Express)
 const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-/* VERSÃO ANTIGA:
-io.on("connection", (socket) => {
-    console.log("Cliente conectado");
-
-    socket.on("entrar_na_loja", (id_loja) => {
-        socket.join(`loja_${id_loja}`);
-        //console.log("entrou nessa loja")
+/* ESSA PARTE DO IO ESTÁ VULNERÁVEL! DEPOIS ATUALIZAR PARA TOKEN
+    // Exemplo de barreira de segurança no Socket.io
+    io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (validarTokenJWT(token)) {
+        next(); // Permite a conexão
+    } else {
+        next(new Error("Não autorizado")); // Bloqueia a conexão na hora
+    }
     });
-
-    //TRATA ERROS:
-    socket.on("connect_error", (err) => {
-        console.log("Erro na conexão do socket:", err.message);
-    });
-
-    socket.on("disconnect", (reason) => {
-        console.log("Cliente desconectado. Motivo:", reason);
-    });
-});
-
 */
+
 //NOVA VERSÃO:
 /*  ATUALIZADA PARA REGISTRAR OS DADOS DOS DISPOSITIVOS 
                     & 
@@ -258,8 +252,18 @@ const dbPixGerados = mysql.createPool({
     database: "pixgerados",
 });
 
+//CONFIGURAÇÕES GLOBAL DO EXPRESS (HTTP)
 app.use(express.json());
 app.use(cors());
+
+// Limitador Global do Express (Afeta apenas Axios/HTTP)
+const limiterGlobal = rateLimit({
+  windowMs: 5 * 60 * 1000,// Janela menor de 5 minutos (ajuda a liberar o cliente mais rápido se ele for bloqueado)
+  limit: 5,// Permite até 300 requisições a cada 5 minutos por IP
+  message: { msg: "Muitas requisições detectadas." }// Muito importante: Retorna em formato JSON para não quebrar o Axios/Java/RN
+
+});
+app.use(limiterGlobal);
 
 app.get("/teste", (req,res) => {
     res.send("teste")
@@ -268,7 +272,7 @@ app.get("/teste", (req,res) => {
 app.post("/login", (req,res) => {
     const email = req.body.email;
     const senha = req.body.senha;
-    console.log("chegou aqui")
+    console.log(`${email} solicitou login.`)
     db.query("SELECT * FROM contas_usuarios WHERE email = ?",[email] ,(err, result) => {
         if(err){
             res.send(err)
@@ -574,7 +578,7 @@ app.post("/busca_produtos_vendidos_especificos_por_data", (req,res) => {
     const dataAno = req.body.dataAno;
     const produto = req.body.produto;
     const buscaPorCodigo = req.body.buscaPorCodigo;//Aqui recebe true para buscar pelo nome referencia ou false para buscar pelo codigo.
-    console.log(`dia: ${dataDia} mes ${dataMes} ano: ${dataAno} id_loja: ${id_da_loja}`)
+    console.log(`dia: ${dataDia} mes ${dataMes} ano: ${dataAno} produto: ${produto} id_loja: ${id_da_loja}`)
     
     if(dataDia != undefined && dataMes != undefined && dataAno != undefined){//SE A BUSCA FOR POR DIA, MES E ANO.         
         const dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
