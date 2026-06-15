@@ -6,6 +6,7 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
 const rateLimit = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
 
 var email_global = '';
 var id_Da_Loja_Global ='';
@@ -265,10 +266,91 @@ const limiterGlobal = rateLimit({
 });
 app.use(limiterGlobal);
 
+const verificarToken = (req, res, next) => {
+    // Pega o token enviado no cabeçalho (Header) da requisição
+    const token = req.headers['authorization'];
+
+    if (!token) return res.status(401).send({ msg: "Token não fornecido!" });
+
+    // Remove a palavra 'Bearer ' caso seus sistemas enviem no padrão
+    const tokenLimpo = token.startsWith('Bearer ') ? token.slice(7) : token;
+
+    jwt.verify(tokenLimpo, CHAVE_SECRETA, (err, usuarioDecodificado) => {
+        if (err) return res.status(403).send({ msg: "Token inválido ou expirado!" });
+        
+        // MÁGICA: Injeta os dados do token dentro da requisição.
+        // Assim, suas rotas antigas continuam funcionando sem mudar uma linha!
+        req.body.email = usuarioDecodificado.email;
+        req.body.loja_id = usuarioDecodificado.loja_id;
+        
+        next(); // Autoriza a requisição a ir para a rota real
+    });
+};
+
+// Como aplicar na rota sem refazer o código interno dela:
+app.post('/api/carrinho/atualizar', verificarToken, (req, res) => {
+    // req.body.email e req.body.loja_id CONTINUAM EXISTINDO AQUI IGUALZINHO ANTES!
+    // Seu código antigo de banco de dados não muda nada.
+});
+
+
 app.get("/teste", (req,res) => {
     res.send("teste")
 })
  
+app.post("/login", (req, res) => {
+    const email = req.body.email;
+    const senha = req.body.senha;
+    console.log(`${email} solicitou login.`);
+
+    // 🌟 DEFINA A SUA CHAVE MESTRE DO SERVIDOR AQUI (Pode inventar qualquer frase)
+    const CHAVE_SECRETA = "GivlasiEstaEntrandoEmOutroPatamar!#&40028922";
+
+    db.query("SELECT * FROM contas_usuarios WHERE email = ?", [email], (err, result) => {
+        if (err) {
+            return res.send(err); // O return evita que o código continue executando se der erro no banco
+        } 
+        
+        if (result.length > 0) {
+            // Alterei o nome da variável interna de 'result' para 'senhaBateu' para não embolar com o resultado do banco
+            bcrypt.compare(senha, result[0].senha, (erro, senhaBateu) => {
+                if (erro) {
+                    return res.send(erro);
+                }
+
+                if (senhaBateu) {
+                    // 1. Prepara os dados que ficarão escondidos matematicamente dentro do token
+                    // ATENÇÃO: Certifique-se de que o nome da coluna no seu banco seja exatamente 'loja_id'
+                    const dadosParaOConfigurar = { 
+                        email: result[0].email, 
+                        loja_id: result[0].id_da_loja,
+                        nivel: result[0].nivel //O NÍVEL DE ACESSO DA CONTA QUE ESTÁ LOGANDO.
+                    };
+
+                    // 2. Gera o Token criptografado configurado para expirar em 7 dias
+                    const token = jwt.sign(dadosParaOConfigurar, CHAVE_SECRETA, { expiresIn: '7d' });
+
+                    // 3. Devolve a resposta unificada. Seus sistemas continuam recebendo a msg de sucesso,
+                    // mas agora levam também o token, o email e o loja_id para usar nas telas!
+                    res.send({
+                        msg: "Usuário logado com sucesso!",
+                        token: token,
+                        email: result[0].email,
+                        id_da_loja: result[0].id_da_loja,
+                        nivel: result[0].nivel
+                    });
+
+                } else {
+                    res.send({ msg: "A senha está incorreta!" });
+                }
+            });
+        } else {
+            res.send({ msg: "Nenhuma conta encontrada com este email!" });
+        }
+    });
+});
+
+/* --- VERSÃO ANTIGA DO LOGIN SEM TOKEN ---
 app.post("/login", (req,res) => {
     const email = req.body.email;
     const senha = req.body.senha;
@@ -290,7 +372,7 @@ app.post("/login", (req,res) => {
             res.send({msg: "Nenhuma conta encontrada com este email!"})
         }
     })
-});
+});*/
 
 app.post('/pega-id-loja', (req, res) => {
     const email = req.body.email;
