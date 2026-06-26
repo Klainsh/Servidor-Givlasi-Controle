@@ -11,6 +11,9 @@ const jwt = require("jsonwebtoken");
 var email_global = '';
 var id_Da_Loja_Global ='';
 
+// CHAVE MESTRE DO SERVIDOR AQUI (Pode inventar qualquer frase)
+const CHAVE_SECRETA = "GivlasiEstaEntrandoEmOutroPatamar!#&40028922";
+
 //LOGO APÓS LANÇAR A NOVA VERSÃO, IREI INICIAR A REESTRUTURAÇÃO DE TODO O SERVIDOR, ORGANIZADO!!!
 
 /*PARTE DO SOCKET.IO*/
@@ -260,7 +263,7 @@ app.use(cors());
 // Limitador Global do Express (Afeta apenas Axios/HTTP)
 const limiterGlobal = rateLimit({
   windowMs: 5 * 60 * 1000,// Janela menor de 5 minutos (ajuda a liberar o cliente mais rápido se ele for bloqueado)
-  limit: 5,// Permite até 300 requisições a cada 5 minutos por IP
+  limit: 50,// Permite até 300 requisições a cada 5 minutos por IP
   message: { msg: "Muitas requisições detectadas." }// Muito importante: Retorna em formato JSON para não quebrar o Axios/Java/RN
 
 });
@@ -302,9 +305,6 @@ app.post("/login", (req, res) => {
     const email = req.body.email;
     const senha = req.body.senha;
     console.log(`${email} solicitou login.`);
-
-    // 🌟 DEFINA A SUA CHAVE MESTRE DO SERVIDOR AQUI (Pode inventar qualquer frase)
-    const CHAVE_SECRETA = "GivlasiEstaEntrandoEmOutroPatamar!#&40028922";
 
     db.query("SELECT * FROM contas_usuarios WHERE email = ?", [email], (err, result) => {
         if (err) {
