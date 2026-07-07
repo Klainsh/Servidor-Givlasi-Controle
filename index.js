@@ -306,7 +306,7 @@ app.post("/login", (req, res) => {
     const senha = req.body.senha;
     console.log(`${email} solicitou login.`);
 
-    db.query("SELECT * FROM contas_usuarios WHERE email = ?", [email], (err, result) => {
+    acessa_Database_Lojas.query("SELECT * FROM contas_usuarios WHERE email = ?", [email], (err, result) => {
         if (err) {
             return res.send(err); // O return evita que o código continue executando se der erro no banco
         } 
@@ -377,7 +377,7 @@ app.post("/login", (req,res) => {
 app.post('/pega-id-loja', (req, res) => {
     const email = req.body.email;
 
-    db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email], (error, result) => { 
+    acessa_Database_Lojas.query("SELECT * FROM contas_usuarios WHERE email= ?",[email], (error, result) => { 
         if(error){
             console.log(error);
             res.send(error)
@@ -388,75 +388,111 @@ app.post('/pega-id-loja', (req, res) => {
     })
 })
 
-app.post("/testeCadastro", (req, res) => {
-    email_global = req.body.email;//esse email aqui é global, para poder criar o BD da loja na hora que o usuario faz o cadastro.
-    const senha = req.body.senha;
-    const email = req.body.email;
-    const nivel = req.body.nivel;
-    const cpf = req.body.cpf;
-
-    console.log(`${email} | ${senha} | ${nivel} | ${cpf}`)
-
-    db.query("SELECT * FROM status_planos", (error, result) => {
-        if(error){
-            console.log(`Erro ao consultar: ${error}`)
-        }else{
-            for(i = 0; i < result.length; i++){
-                console.log(result[i])
-            }
-        }
-    })
-    
-    /*db.query("SELECT * FROM contas_usuarios WHERE email=?", [email], (err,result) => {
-        if(err){
-            res.send(err);
-        }
-        else if(result.length == 0){
-            bcrypt.hash(senha, saltRounds, (erro,hash) => {
-                db.query("INSERT INTO contas_usuarios(senha,email,nivel,cpf) VALUES (?,?,?,?)", [hash,email,nivel,cpf], (err,response) => {
-                    if(err){
-                        res.send(err);
-                    }else{//Modifiquei aqui, não tinha o else.   
-                        res.send({msg: "Cadastrado com sucesso!"});
-                        criaDatabaseDaLoja();//também já cria as tabelas necessárias.
-                    }
-                });
-            })
-        }else{
-            res.send({msg: "Já existe uma conta cadastrada com este email!"});
-        }       
-    });//PARA VALIDAR SE JÁ TEM ALGUM EMAIL IGUAL CADASTRADO NO BD*/
-
-})
-
-app.post("/cadastro", (req,res) => {
-    email_global = req.body.email;//esse email aqui é global, para poder criar o BD da loja na hora que o usuario faz o cadastro.
+app.post("/cadastro", (req, res) => {
+    email_global = req.body.email;
     const senha = req.body.senha;
     const email = req.body.email.trim().toLowerCase();
     const nivel = req.body.nivel;
     const cpf = req.body.cpf;
-    //O id_da_loja É AUTO INCREMENT NO BANCO DE DADOS!
 
-    db.query("SELECT * FROM contas_usuarios WHERE email=?", [email], (err,result) => {
-        if(err){
-            res.send(err);
-        }
-        if(result.length == 0){
-            bcrypt.hash(senha, saltRounds, (erro,hash) => {
-                db.query("INSERT INTO contas_usuarios(senha,email,nivel,cpf) VALUES (?,?,?,?)", [hash,email,nivel,cpf], (err,response) => {
-                    if(err){
-                        res.send(err);
-                    }else{//Modifiquei aqui, não tinha o else.   
-                        res.send({msg: "Cadastrado com sucesso!"});
-                        criaDatabaseDaLoja();//também já cria as tabelas necessárias.
+    // 1. Validação inicial do e-mail (Direto do Pool)
+    acessa_Database_Lojas.query("SELECT id_usuario FROM contas_usuarios WHERE email = ?", [email], (err, result) => {
+        if (err) return res.send(err);
+        if (result.length > 0) return res.send({ msg: "Já existe uma conta cadastrada com este email!" });
+
+        // Extrai uma conexão física do Pool utilizando a variável limpa 'conn'
+        acessa_Database_Lojas.getConnection((errConexao, conn) => {
+            if (errConexao) {
+                console.error("Erro ao obter conexão do Pool:", errConexao);
+                return res.send(errConexao);
+            }
+
+            // 2. INICIA A TRANSAÇÃO NA CONEXÃO EXCLUSIVA
+            conn.beginTransaction((errTransaction) => {
+                if (errTransaction) {
+                    conn.release(); // Libera a conexão em caso de falha imediata
+                    return res.send(errTransaction);
+                }
+
+                // ETAPA 1: Criar a empresa provisória usando 'conn'
+                const sqlEmpresa = "INSERT INTO empresas (nome_fantasia, tipo_loja, cidade, estado) VALUES (?, ?, ?, ?)";
+                const valoresEmpresa = ["Minha Empresa", "pdv", "Não Informada", "NI"];
+
+                conn.query(sqlEmpresa, valoresEmpresa, (errEmpresa, responseEmpresa) => {
+                    if (errEmpresa) {
+                        return conn.rollback(() => {
+                            conn.release();
+                            res.send(errEmpresa);
+                        });
                     }
+
+                    // Captura o ID gerado automaticamente pelo AUTO_INCREMENT
+                    const novoIdDaLoja = responseEmpresa.insertId;
+
+                    // Criptografa a senha com bcrypt
+                    bcrypt.hash(senha, saltRounds, (erroHash, hash) => {
+                        if (erroHash) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                res.send(erroHash);
+                            });
+                        }
+
+                        // ETAPA 2: Criar o usuário apontando para o id_da_loja gerado usando 'conn'
+                        const sqlUsuario = "INSERT INTO contas_usuarios (id_da_loja, senha, email, nivel, cpf) VALUES (?, ?, ?, ?, ?)";
+                        const valoresUsuario = [novoIdDaLoja, hash, email, nivel, cpf];
+
+                        conn.query(sqlUsuario, valoresUsuario, (errUsuario, responseUsuario) => {
+                            if (errUsuario) {
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    res.send(errUsuario);
+                                });
+                            }
+
+                            //INSERE O STATUS INICIAL DO PLANO DESBRAVADOR DA LOJA.
+                            //Faço ele ao final, porque não interfere em nada no uso inicial do app cliente.
+                            const dataFutura = calcularDataFutura(7)
+                            /*A função .toISOString() do JavaScript sempre converte a data para o fuso horário UTC (Horário de Londres/Greenwich). Como o Brasil está 3 horas atrás do UTC (fuso -3), se um lojista se cadastrar no seu sistema em um fim de noite (por exemplo, às 21h30 em Camaçari), o .toISOString() vai entender que já passou da meia-noite em Londres e vai pular o dia da data de vencimento uma diária para a frente por engano. */
+                            //MAS VOU MANTER POR CONTA DA FUNCAO -DESBLOQUEIO DE CONFIANÇA- DO SISTEMA.
+                            //MESMO QUE FIQUE UM DIA A MAIS OU A MENOS, O USUÁRIO TEM 7DIAS BÓNUS MESMO.
+                            const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
+
+                            const sqlPlanoInicial = "INSERT INTO status_planos(id_da_loja,email,metodo_de_pagamento,status,descricao_do_plano,preco,data_de_inicio,data_de_vencimento) values(?,?,?,?,?,?,?,?)"
+                            const valoresPlanos = [novoIdDaLoja, email, "indefinido", "ativo", "desbravador", 0.00,`${dataSistema()}`,`${dataFuturaTratada}`]
+                            conn.query(sqlPlanoInicial, valoresPlanos, (errPlanoInicial, responsePlanoInicial) => {
+                                if(errPlanoInicial){
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        res.send(errPlanoInicial);
+                                    })
+                                }
+
+                                // 3. SE TUDO DEU CERTO, PERSISTE OS DADOS DEFINITIVAMENTE NO BANCO
+                                conn.commit((errCommit) => {
+                                    if (errCommit) {
+                                        return conn.rollback(() => {
+                                            conn.release();
+                                            res.send(errCommit);
+                                        });
+                                    }
+
+                                    // Libera a conexão de volta para o Pool após o sucesso absoluto
+                                    conn.release();
+
+                                    // Retorno de sucesso para o cliente
+                                    res.send({ msg: "Cadastrado com sucesso!" });
+                                })
+                            
+                            });
+                        });
+                    });
                 });
-            })
-        }else{
-            res.send({msg: "Já existe uma conta cadastrada com este email!"});
-        }       
-    });//PARA VALIDAR SE JÁ TEM ALGUM EMAIL IGUAL CADASTRADO NO BD
+            });
+        });
+    });
 });
+
 
 //NOVA FUNCAO REFATORADA!
 app.post("/cadastrar-produto", (req,res) => {
@@ -855,7 +891,7 @@ app.post("/busca_produtos_vendidos_especificos_por_data", (req,res) => {
 })
 
 
-
+//DESCONTINUADA, PODE EXCLUIR.
 async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora que o usuario cria a conta.
     db.query("SELECT * FROM contas_usuarios WHERE email= ?",[email_global], (error, result) => {
         if(error){
@@ -915,6 +951,7 @@ async function criaDatabaseDaLoja(){//Essa função só pode ser chamada na hora
     })
 }
 
+//DESCONTINUADA, PODE EXCLUIR.
 async function criaDatabase_Vendas_Da_Loja(){
     db0.query(`CREATE DATABASE IF NOT EXISTS vendas_loja${id_Da_Loja_Global}`,(err) => {
         if(err){
@@ -2150,7 +2187,7 @@ async function insereNovaDataDeVencimento(novaData,id_da_loja){//Insere a nova d
        vai ser somada a data de aprovaçao do plano escolhido.
     */ 
 
-    db.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
+    acessa_Database_Lojas.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
         if(erro){
             console.log(`Erro na função somaDataMensalidade: ${erro}`)
         }else{
@@ -2159,7 +2196,7 @@ async function insereNovaDataDeVencimento(novaData,id_da_loja){//Insere a nova d
                 date1.setDate(date1.getDate() + novaData)
                 const dataFuturaTratada = (date1.toISOString().split('T')[0])
 
-                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', descricao_do_plano='${novaData} dias', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
+                acessa_Database_Lojas.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', descricao_do_plano='${novaData} dias', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
                     if(error){
                         console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
                     }else{
@@ -2170,7 +2207,7 @@ async function insereNovaDataDeVencimento(novaData,id_da_loja){//Insere a nova d
                 const date2 = new Date();
                 date2.setDate(date2.getDate() + novaData)
                 const dataFuturaTratada = (date2.toISOString().split('T')[0])
-                db.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
+                acessa_Database_Lojas.query(`UPDATE status_planos SET metodo_de_pagamento='pix', status='ativo', data_de_vencimento='${dataFuturaTratada}' WHERE id_da_loja=${id_da_loja}`, (error) => {
                     if(error){
                         console.log(`Erro na função 'insereNovaDataDeVencimento()' erro: ${error}`)
                     }else{
@@ -2206,7 +2243,7 @@ app.post("/busca-dados-para-gerar-pix", (req,res) => {
 
 app.post("/busca_data_de_vencimento_mensalidade", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
-    db.query(`SELECT * FROM status_planos WHERE id_da_loja=${id_da_loja}`, (error, result) => {
+    acessa_Database_Lojas.query(`SELECT * FROM status_planos WHERE id_da_loja=${id_da_loja}`, (error, result) => {
         if(error){
             console.log("Erro no post 'busca_data_de_vencimento_mensalidade:'" + error)
         }else{
@@ -2220,13 +2257,13 @@ app.post("/desbloqueio-de-confianca", (req,res) =>{
     const id_da_loja = req.body.id_da_loja;
     const dataFutura = calcularDataFutura(7)
     const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])//utilizar sempre essa no sistema.
-    db.query(`SELECT status FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
+    acessa_Database_Lojas.query(`SELECT status FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
         if(erro){
             console.log("Erro ao verificar status da loja para desbloqueio-de-confiança: " + erro)
             res.send("Error!")
         }else{
             if(result[0].status != "pendente"){
-                db.query(`UPDATE status_planos SET status='pendente', data_de_vencimento='${dataFuturaTratada}' where id_da_loja=${id_da_loja};`, (error) => {
+                acessa_Database_Lojas.query(`UPDATE status_planos SET status='pendente', data_de_vencimento='${dataFuturaTratada}' where id_da_loja=${id_da_loja};`, (error) => {
                     if(error){
                         console.log(`Erro ao tentar inserir o status_plano: ` + error)
                         res.send("Error!")
@@ -2275,7 +2312,7 @@ function somaDataMensalidade(dias, id_da_loja){
     const date = new Date();
     date.setDate(date.getDate() + dias)
 
-    db.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
+    acessa_Database_Lojas.query(`SELECT data_de_vencimento FROM status_planos WHERE id_da_loja=${id_da_loja}`, (erro,result) =>{
         if(erro){
             console.log(`Erro na funcao somaDataMensalidade: ${erro}`)
         }else{
