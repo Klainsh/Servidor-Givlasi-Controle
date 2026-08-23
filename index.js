@@ -296,11 +296,125 @@ app.post('/api/carrinho/atualizar', verificarToken, (req, res) => {
     // Seu código antigo de banco de dados não muda nada.
 });
 
+//funcão que valida o token da requisição
+function autenticarToken(req, res, next) {
 
-app.get("/teste", (req,res) => {
-    res.send("teste")
-})
- 
+    const authHeader = req.headers["authorization"];
+
+    if (!authHeader) {
+        return res.status(401).json({
+            msg: "Token não informado."
+        });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+        return res.status(401).json({
+            msg: "Token inválido."
+        });
+    }
+
+    jwt.verify(token, CHAVE_SECRETA, (erro, usuario) => {
+
+        if (erro) {
+            return res.status(401).json({
+                msg: "Token inválido ou expirado."
+            });
+        }
+
+        req.usuario = usuario;
+
+        next();
+    });
+}
+
+app.post("/login", (req, res) => {
+
+    const email = req.body.email;
+    const senha = req.body.senha;
+
+    console.log(`${email} solicitou login.`);
+
+    acessa_Database_Lojas.query(
+        "SELECT * FROM contas_usuarios WHERE email = ?",
+        [email],
+        (err, result) => {
+
+            // Erro no banco
+            if (err) {
+                console.error("Erro ao consultar banco no login:", err);
+
+                return res.status(500).json({
+                    msg: "Erro interno do servidor."
+                });
+            }
+
+            // Nenhuma conta encontrada
+            if (result.length === 0) {
+
+                return res.status(401).json({
+                    msg: "Nenhuma conta encontrada com este email!"
+                });
+            }
+
+            bcrypt.compare(
+                senha,
+                result[0].senha,
+                (erro, senhaBateu) => {
+
+                    // Erro ao comparar senha
+                    if (erro) {
+
+                        console.error(
+                            "Erro ao comparar senha:",
+                            erro
+                        );
+
+                        return res.status(500).json({
+                            msg: "Erro interno do servidor."
+                        });
+                    }
+
+                    // Senha incorreta
+                    if (!senhaBateu) {
+
+                        return res.status(401).json({
+                            msg: "A senha está incorreta!"
+                        });
+                    }
+
+                    // Dados que serão colocados no JWT
+                    const dadosParaOConfigurar = {
+                        email: result[0].email,
+                        loja_id: result[0].id_da_loja,
+                        nivel: result[0].nivel
+                    };
+
+                    // Gera token
+                    const token = jwt.sign(
+                        dadosParaOConfigurar,
+                        CHAVE_SECRETA,
+                        {
+                            expiresIn: "7d"
+                        }
+                    );
+
+                    // Login realizado
+                    return res.status(200).json({
+                        msg: "Usuário logado com sucesso!",
+                        token: token,
+                        email: result[0].email,
+                        id_da_loja: result[0].id_da_loja,
+                        nivel: result[0].nivel
+                    });
+                }
+            );
+        }
+    );
+});
+
+/* VERSÃO ANTERIOR DO LOGIN
 app.post("/login", (req, res) => {
     const email = req.body.email;
     const senha = req.body.senha;
@@ -327,7 +441,8 @@ app.post("/login", (req, res) => {
                         nivel: result[0].nivel //O NÍVEL DE ACESSO DA CONTA QUE ESTÁ LOGANDO.
                     };
 
-                    // 2. Gera o Token criptografado configurado para expirar em 7 dias
+                    // 2. Gera o Token configurado para expirar em 7 dias
+                    // --- ATENÇÃO, NÃO COLOCAR DADOS SENSIVEIS DENTRO DO TOKEN ---
                     const token = jwt.sign(dadosParaOConfigurar, CHAVE_SECRETA, { expiresIn: '7d' });
 
                     // 3. Devolve a resposta unificada. Seus sistemas continuam recebendo a msg de sucesso,
@@ -349,30 +464,7 @@ app.post("/login", (req, res) => {
         }
     });
 });
-
-/* --- VERSÃO ANTIGA DO LOGIN SEM TOKEN ---
-app.post("/login", (req,res) => {
-    const email = req.body.email;
-    const senha = req.body.senha;
-    console.log(`${email} solicitou login.`)
-    db.query("SELECT * FROM contas_usuarios WHERE email = ?",[email] ,(err, result) => {
-        if(err){
-            res.send(err)
-        } 
-        if(result.length > 0){
-            bcrypt.compare(senha, result[0].senha, (erro, result) => {
-                if(result){
-                    res.send({msg:"Usuário logado com sucesso!"})
-                }else{
-                    res.send({msg:"A senha está incorreta!"})
-                }
-                
-            });
-        }else{
-            res.send({msg: "Nenhuma conta encontrada com este email!"})
-        }
-    })
-});*/
+*/
 
 app.post('/pega-id-loja', (req, res) => {
     const email = req.body.email;
@@ -1463,8 +1555,8 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
 })
 
 //FUNCAO JÁ REESTRUTURADA. ESSA FUNÇÃO BUSCA TODOS OS PRODUTOS DE VEZ.
-app.post("/busca-produtos", (req, res) =>{
-    const id_da_loja = req.body.id_da_loja;
+app.post("/busca-produtos", autenticarToken, (req, res) =>{
+    const id_da_loja = req.body.id_da_loja; 
     listaDosProdutos = []
     console.log(`Buscou esse carai ${id_da_loja}`)
     acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ?`, [id_da_loja], (error, result) => {
