@@ -622,6 +622,115 @@ app.post("/cadastrar-produto", (req,res) => {
 })
 
 //NOVA FUNCAO REFATORADA! CUIDADO AO USAR ESSA FUNÇÃO, TENHO OUTRA COM O NOME 'BUSCA_PRODUTOS' QUE É PARA BUSCAR A LISTA DOS MESMOS.
+//FUNÇÃO UTILIZANDO O TOKEN.
+app.post("/buscar-produto", autenticarToken, (req, res) => {
+
+    const codigoProduto = req.body.codigoProduto;
+    const buscaPeloCodigo = req.body.modoDeBusca;
+
+    // A loja agora vem do token validado
+    const id_da_loja = req.usuario.loja_id;
+
+    // Executa as ações baseadas na demanda
+    if (buscaPeloCodigo == false) {
+
+        // Busca pelo código do produto
+        acessa_Database_Lojas.query(
+            `SELECT * FROM produtos 
+             WHERE loja_id = ? AND codigo_produto = ?`,
+            [id_da_loja, codigoProduto],
+            (error, result) => {
+
+                // Erro no banco
+                if (error) {
+
+                    console.error(
+                        "Erro ao buscar produto pelo código:",
+                        error
+                    );
+
+                    return res.status(500).json({
+                        msg: "Ocorreu um erro ao tentar buscar o produto desejado!"
+                    });
+                }
+
+                // Nenhum produto encontrado
+                if (result.length === 0) {
+
+                    console.log("Nenhum resultado encontrado!");
+
+                    return res.status(404).json({
+                        msg: "Nenhum resultado encontrado!"
+                    });
+                }
+
+                // Produto encontrado
+                return res.status(200).json([
+                    {
+                        codigo_produto: result[0].codigo_produto,
+                        produto: result[0].nome,
+                        preco: result[0].preco_venda,
+                        estoque: result[0].estoque,
+                        valor_de_compra: result[0].preco_compra
+                    }
+                ]);
+            }
+        );
+
+    } else {
+
+        // Busca pelo nome do produto
+        acessa_Database_Lojas.query(
+            `SELECT * FROM produtos 
+             WHERE loja_id = ? AND nome LIKE ?`,
+            [id_da_loja, `%${codigoProduto}%`],
+            (error, result) => {
+
+                // Erro no banco
+                if (error) {
+
+                    console.error(
+                        "Erro ao buscar produto pelo nome:",
+                        error
+                    );
+
+                    return res.status(500).json({
+                        msg: "Ocorreu um erro ao tentar buscar o produto desejado!"
+                    });
+                }
+
+                // LISTA COM OS PRODUTOS ENCONTRADOS
+                const listaProdutos = [];
+
+                if (result.length === 0) {
+
+                    console.log("Nenhum resultado encontrado!");
+
+                    return res.status(404).json({
+                        msg: "Nenhum resultado encontrado!"
+                    });
+                }
+
+                for (let r = 0; r < result.length; r++) {
+
+                    listaProdutos.push({
+                        codigo_produto: result[r].codigo_produto,
+                        produto: result[r].nome,
+                        preco: result[r].preco_venda,
+                        estoque: result[r].estoque,
+                        valor_de_compra: result[r].preco_compra
+                    });
+                }
+
+                console.log(listaProdutos);
+
+                return res.status(200).json(listaProdutos);
+            }
+        );
+    }
+});
+
+/*FUNÇÃO ANTIGA, SEM PEGAR DADOS DO TOKEN
 app.post("/buscar-produto", (req,res) => { 
     const codigoProduto = req.body.codigoProduto;
     const id_da_loja = req.body.id_da_loja;
@@ -664,7 +773,7 @@ app.post("/buscar-produto", (req,res) => {
             }
         })
     }
-})
+})*/
 
 //NOVA FUNCAO REFATORADA!
 //Fornece as informacoes dos produtos vendidos para a tela: Produtos Vendidos.
@@ -1204,6 +1313,59 @@ app.post("/finalizar-venda", (req,res) => {
 
 //DEPOIS VOU SEPARAR ESSAS "FUNCOES" TUDO QUE ESTÃO DENTRO DELA.
 //O FINALIZAR VENDA POR COMANDA É DIFERENTE! 
+app.post("/finalizar-comanda", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id;
+    const comanda = req.usuario.email;
+    const venda_id = req.body.venda_id;
+    const itens = req.body.itens;
+
+    if (!venda_id || !Array.isArray(itens)) {
+        return res.status(400).json({
+            msg: "Dados inválidos para finalizar a comanda."
+        });
+    }
+
+    itens.forEach(item => {
+        acessa_Database_Lojas.query(
+            `UPDATE vendas_itens 
+             SET quantidade = ?, preco_venda = ?, preco_compra = ?, subtotal = ?
+             WHERE venda_id = ? AND produto_id = ?`,
+            [
+                item.quantidade,
+                item.preco_venda,
+                item.preco_compra,
+                item.quantidade * item.preco_venda,
+                venda_id,
+                item.produto_id
+            ],
+            (error) => {
+                if (error) {
+                    console.error("Erro ao atualizar item da comanda:", error);
+                }
+            }
+        );
+    });
+
+    acessa_Database_Lojas.query(
+        `UPDATE mesas SET status = 'finalizada' WHERE loja_id = ? AND identificador = ?`,
+        [id_da_loja, comanda],
+        (error) => {
+            if (error) {
+                console.error("Erro ao finalizar comanda:", error);
+                return res.status(500).json({
+                    msg: "Erro interno do servidor."
+                });
+            }
+
+            return res.status(200).json({
+                msg: "Comanda finalizada com sucesso"
+            });
+        }
+    );
+});
+
+
+/* FUNCAO ANTIGA SEM TOKEN
 app.post("/finalizar-comanda", (req, res) => { 
 
     const loja_id = req.body.loja_id;
@@ -1305,7 +1467,7 @@ app.post("/finalizar-comanda", (req, res) => {
                             NÃO TENHA UMA TELA DESATUALIZADA NO OUTRO.
                             posso passar o identificador, para que o pc/celular ao receber a notificacao
                             verifique se está com a comanda aberta e se tiver, fechar
-                             */
+                             /
                             //vou criar outro io.to que vai passar a loja e o identificador, para repassar ao finalizar
                             //no front, se o id e o identificador bater com o que o usuario está utilizando na tela de vendas
                             //eu fecho/limpo ela lá
@@ -1335,7 +1497,7 @@ app.post("/finalizar-comanda", (req, res) => {
 
     });
 
-});
+});*/
 
 //FUNCAO JA REFATORADA.
 app.post("/busca-Vendas-Do-Dia", (req,res) => { 
@@ -1574,6 +1736,92 @@ app.post("/busca-produtos", autenticarToken, (req, res) =>{
 })
 
 //PARTE DA COMANDA
+app.post("/cria-nova-comanda", autenticarToken, async (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
+    const identificador = req.body.novaComanda; // nome da nova comanda
+
+    if (!identificador) {
+        return res.status(400).json({
+            msg: "Nome da comanda é obrigatório."
+        });
+    }
+
+    acessa_Database_Lojas.getConnection((err, conn) => {
+        if (err) {
+            console.error("Erro conexão:", err);
+            return res.status(500).json({ msg: "Erro de conexão com o banco." });
+        }
+
+        conn.beginTransaction(err => {
+            if (err) {
+                conn.release();
+                console.error("Erro transação:", err);
+                return res.status(500).json({ msg: "Erro ao iniciar transação." });
+            }
+
+            // 1️⃣ cria venda aberta
+            conn.query(
+                `INSERT INTO vendas (loja_id, status) VALUES (?, 'aberta')`,
+                [id_da_loja],
+                (erro, result) => {
+                    if (erro) {
+                        return conn.rollback(() => {
+                            conn.release();
+                            console.error("Erro ao criar venda:", erro);
+                            res.status(500).json({ msg: "Erro ao criar venda." });
+                        });
+                    }
+
+                    const vendaId = result.insertId;
+
+                    // 2️⃣ cria mesa ligada à venda
+                    conn.query(
+                        `INSERT INTO mesas (loja_id, identificador, venda_id) VALUES (?, ?, ?)`,
+                        [id_da_loja, identificador, vendaId],
+                        erro => {
+                            if (erro) {
+                                if (erro.code === "ER_DUP_ENTRY") {
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        res.status(409).json({
+                                            msg: "Já existe uma mesa com esse nome aberta."
+                                        });
+                                    });
+                                }
+
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    console.error("Erro ao criar mesa:", erro);
+                                    res.status(500).json({ msg: "Erro ao criar mesa." });
+                                });
+                            }
+
+                            // FINALIZA TRANSAÇÃO
+                            conn.commit(err => {
+                                if (err) {
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        console.error("Erro commit:", err);
+                                        res.status(500).json({ msg: "Erro ao finalizar transação." });
+                                    });
+                                }
+
+                                conn.release();
+                                res.status(200).json({
+                                    msg: "Mesa aberta com sucesso!",
+                                    venda_id: vendaId,
+                                    identificador: identificador
+                                });
+                            });
+                        }
+                    );
+                }
+            );
+        });
+    });
+});
+
+/*VERSÃO ANTIGA SEM TOKEN
 app.post("/cria-nova-comanda", async (req, res) => {
     const id_da_loja = req.body.id_da_loja;
     const identificador = req.body.novaComanda;
@@ -1649,7 +1897,7 @@ app.post("/cria-nova-comanda", async (req, res) => {
         });
     });
 
-})
+})*/
 
 app.post("/excluir-comanda", (req, res) => {
     const id_da_loja = req.body.id_da_loja;
@@ -1738,6 +1986,48 @@ app.post("/insere-itens-da-comanda", (req,res) => {
     //loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(cod_produto,produto,unidades,preco)`)
 })
 
+app.post("/buscar-itens-comanda", autenticarToken, (req, res) => {
+    //ESSA FUNCAO É DA VENDA RÁPIDA, ENTÃO A COMANDA É O EMAIL.
+    const id_da_loja = req.usuario.loja_id;
+    const comanda = req.usuario.email; // identificador da comanda vem do token!
+
+    console.log(`Buscou itens da comanda. Loja: ${id_da_loja}, Comanda: ${comanda}`);
+
+    acessa_Database_Lojas.query(
+        `SELECT 
+            vi.id,
+            vi.produto_id,
+            vi.produto_nome,
+            vi.quantidade,
+            vi.preco_venda,
+            vi.preco_compra,
+            vi.subtotal
+         FROM mesas m
+         JOIN vendas_itens vi ON vi.venda_id = m.venda_id
+         WHERE m.loja_id = ?
+         AND m.identificador = ?`,
+        [id_da_loja, comanda],
+        (error, result) => {
+            if (error) {
+                console.error("Erro ao buscar itens da comanda:", error);
+                return res.status(500).json({
+                    msg: "Erro interno do servidor."
+                });
+            }
+
+            if (result.length > 0) {
+                console.log(`Resultado da busca itens comanda: ${result[0].produto_nome}`);
+                return res.status(200).json(result);
+            } else {
+                return res.status(404).json({
+                    msg: "Nenhum resultado encontrado para esta comanda."
+                });
+            }
+        }
+    );
+});
+
+/*VERSÃO SEM TOKEN
 app.post("/buscar-itens-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const comanda = req.body.comanda;//identificador 
@@ -1769,7 +2059,7 @@ app.post("/buscar-itens-comanda", (req,res) => {
             }
         }
     })
-})
+})*/
 //FIM PARTE DA COMANDA
 
 //COMANDA REFATORADA:
@@ -2006,6 +2296,51 @@ app.post("/verifica-comanda-aberta", (req, res) => {
     ETORNA O CÓDIGO DO PRODUTO. (AO BUSCAR UM PRODU-
     TO PELO NOME O APP TAMBÉM PRECISA DO CÓDIGO DELE).
 */
+app.post("/pega-codigo-produto", autenticarToken, (req, res) => {
+
+    const loja_id = req.usuario.loja_id;
+    const nome_Do_Produto = req.body.nome_Do_Produto;
+
+    // console.log(`PEGOU O CODIGO DO PRODUTO PELO NOME. ${loja_id} & ${nome_Do_Produto}`);
+
+    acessa_Database_Lojas.query(
+        `SELECT * FROM produtos WHERE loja_id = ? AND nome = ?`,
+        [loja_id, nome_Do_Produto],
+        (error, result) => {
+
+            // Erro no banco
+            if (error) {
+
+                console.error(
+                    "Erro ao buscar código do produto:",
+                    error
+                );
+
+                return res.status(500).json({
+                    msg: "Erro interno do servidor."
+                });
+            }
+
+            // Nenhum produto encontrado
+            if (result.length === 0) {
+
+                return res.status(404).json({
+                    msg: "Nenhum produto encontrado com esse nome."
+                });
+            }
+
+            // Produto encontrado
+            console.log(
+                `RESULTADO DO PEGO-CODIGO-PRODUTO: ${JSON.stringify(result)}`
+            );
+
+            return res.status(200).json({
+                msg: result
+            });
+        }
+    );
+});
+/*FUNCAO ANTIGA SEM AUTENTICAÇÃO
 app.post("/pega-codigo-produto", (req,res) => {
     const loja_id = req.body.loja_id;
     const nome_Do_Produto = req.body.nome_Do_Produto;
@@ -2016,7 +2351,7 @@ app.post("/pega-codigo-produto", (req,res) => {
             console.log(`Erro: ${error}`)
             res.send({msg:"Erro"})
         }if(result.length > 0){
-            /* AQUI RETORNO O CÓDIGO DO PRODUTO QUE FOI SELECIONADO PELO NOME. */
+            // AQUI RETORNO O CÓDIGO DO PRODUTO QUE FOI SELECIONADO PELO NOME.
             console.log(`RESULTADO DO PEGO-CODIGO-PRODUTO: ${result}`)
             res.send({msg:result})
         }else{
@@ -2024,12 +2359,45 @@ app.post("/pega-codigo-produto", (req,res) => {
         }
         console.log(result)
     })
-});
+});*/
 
 //FUNÇÃO USADA PARA A TELA DE VENDAS RÁPIDA.
 /*NA TELA DE VENDAS POR COMANDA, O SERVIDOR JÁ ENVIA O venda_id PARA O FRONT,
   MAS PARA A TELA DE VENDAS RÁPIDA PRECISEI ADAPTAR ALGO.
 */
+app.post("/pega-venda-id", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id;
+    const comanda = req.usuario.email; // identificador da comanda vem do token
+
+    acessa_Database_Lojas.query(
+        `SELECT m.venda_id
+         FROM mesas m
+         WHERE m.loja_id = ?
+         AND m.identificador = ?`,
+        [id_da_loja, comanda],
+        (error, result) => {
+            if (error) {
+                console.error("Erro ao buscar venda_id:", error);
+                return res.status(500).json({
+                    msg: "Erro interno do servidor."
+                });
+            }
+
+            if (result.length > 0) {
+                console.log(`Pegou venda_id: ${result[0].venda_id}`);
+                return res.status(200).json({
+                    venda_id: result[0].venda_id
+                });
+            } else {
+                return res.status(404).json({
+                    msg: "Nenhum venda_id encontrado."
+                });
+            }
+        }
+    );
+});
+
+/* VERSÃO ANTIGA
 app.post("/pega-venda-id", (req,res) => { 
     const loja_id = req.body.loja_id; 
     const comanda = req.body.comanda; 
@@ -2040,7 +2408,7 @@ app.post("/pega-venda-id", (req,res) => {
             console.log(`Erro: ${error}`)
             res.send({msg: "Erro"})
         }if(result.length > 0){ 
-            /* AQUI RETORNO O venda_id DA COMANDA ABERTA. */
+            // AQUI RETORNO O venda_id DA COMANDA ABERTA.
             console.log(`RESULTADO DO PEGA-VENDA-ID: ${result[0].venda_id}`)  
             const venda_id = result[0].venda_id;
             res.send({msg: venda_id})
@@ -2048,7 +2416,7 @@ app.post("/pega-venda-id", (req,res) => {
             res.send({msg: "Erro"})//NENHUMA COMANDA ENCONTRADA COM ESSE NOME.
         }
     })
-})
+})*/
 
 //FIM DAS FUNCOES INICIALMENTE USADAS APENAS NA VERSÃO DESKTOP.
 
