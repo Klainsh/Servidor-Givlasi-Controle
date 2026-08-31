@@ -330,7 +330,6 @@ function autenticarToken(req, res, next) {
 }
 
 app.post("/login", (req, res) => {
-
     const email = req.body.email;
     const senha = req.body.senha;
 
@@ -340,76 +339,51 @@ app.post("/login", (req, res) => {
         "SELECT * FROM contas_usuarios WHERE email = ?",
         [email],
         (err, result) => {
-
-            // Erro no banco
             if (err) {
                 console.error("Erro ao consultar banco no login:", err);
-
-                return res.status(500).json({
-                    msg: "Erro interno do servidor."
-                });
+                return res.status(500).json({ msg: "Erro interno do servidor." });
             }
 
-            // Nenhuma conta encontrada
             if (result.length === 0) {
-
-                return res.status(401).json({
-                    msg: "Nenhuma conta encontrada com este email!"
-                });
+                return res.status(401).json({ msg: "Nenhuma conta encontrada com este email!" });
             }
 
-            bcrypt.compare(
-                senha,
-                result[0].senha,
-                (erro, senhaBateu) => {
-
-                    // Erro ao comparar senha
-                    if (erro) {
-
-                        console.error(
-                            "Erro ao comparar senha:",
-                            erro
-                        );
-
-                        return res.status(500).json({
-                            msg: "Erro interno do servidor."
-                        });
-                    }
-
-                    // Senha incorreta
-                    if (!senhaBateu) {
-
-                        return res.status(401).json({
-                            msg: "A senha está incorreta!"
-                        });
-                    }
-
-                    // Dados que serão colocados no JWT
-                    const dadosParaOConfigurar = {
-                        email: result[0].email,
-                        loja_id: result[0].id_da_loja,
-                        nivel: result[0].nivel
-                    };
-
-                    // Gera token
-                    const token = jwt.sign(
-                        dadosParaOConfigurar,
-                        CHAVE_SECRETA,
-                        {
-                            expiresIn: "7d"
-                        }
-                    );
-
-                    // Login realizado
-                    return res.status(200).json({
-                        msg: "Usuário logado com sucesso!",
-                        token: token,
-                        email: result[0].email,
-                        id_da_loja: result[0].id_da_loja,
-                        nivel: result[0].nivel
-                    });
+            bcrypt.compare(senha, result[0].senha, (erro, senhaBateu) => {
+                if (erro) {
+                    console.error("Erro ao comparar senha:", erro);
+                    return res.status(500).json({ msg: "Erro interno do servidor." });
                 }
-            );
+
+                if (!senhaBateu) {
+                    return res.status(401).json({ msg: "A senha está incorreta!" });
+                }
+
+                // Dados que serão colocados no JWT
+                const dadosParaOConfigurar = {
+                    id_usuario: result[0].id_usuario,   // novo campo incluído
+                    email: result[0].email,
+                    loja_id: result[0].id_da_loja,
+                    nivel: result[0].nivel
+                };
+
+                // Gera token
+                const token = jwt.sign(dadosParaOConfigurar, CHAVE_SECRETA, {
+                    expiresIn: "7d"
+                });
+
+                // Login realizado
+                //AO FINAL DAS IMPLEMENTAÇÕES DO TOKEN VOU DEIXAR APENAS
+                //O CAMPO 'email' no retorno, pois vou utilizar para a comanda 
+                //NA TELA DE VENDAS RÁPIDA, O RESTO POSSO DELETAR.
+                return res.status(200).json({
+                    msg: "Usuário logado com sucesso!",
+                    token: token,
+                    id_usuario: result[0].id_usuario,   // também devolve no body
+                    email: result[0].email,
+                    id_da_loja: result[0].id_da_loja,
+                    nivel: result[0].nivel
+                });
+            });
         }
     );
 });
@@ -466,6 +440,33 @@ app.post("/login", (req, res) => {
 });
 */
 
+//FUNÇÃO CHAMADA PARA VERIFICAR NIVEL DE ACESSO, E PERMITIR O USUÁRIO ACESSAR UM LOCAL.
+app.post("/verificar-acesso", autenticarToken, (req, res) => {
+    const nivel = req.usuario.nivel; // vem direto do token
+    const recurso = req.body.recurso; // opcional: qual tela/funcionalidade
+
+    // Exemplo simples: só nível 2 acessa controle-da-loja
+    if (recurso === "controle-da-loja") {
+        if (nivel === 2) {
+            return res.status(200).json({ acesso: true });
+        } else {
+            return res.status(403).json({ acesso: false, msg: "Você não tem permissão para acessar esta tela." });
+        }
+    }else if(recurso === "financeiro"){// Exemplo simples: só nível 3 acessa financeiro
+        if (nivel === 3) {
+            return res.status(200).json({ acesso: true });
+        } else {
+            return res.status(403).json({ acesso: false, msg: "Você não tem permissão para acessar esta tela." });
+        }
+    }else {
+        return res.status(400).json({ acesso: false, msg: "Recurso inválido ou não configurado." });
+    }
+    // Para outros recursos, pode expandir lógica
+    return res.status(200).json({ acesso: true });
+});
+
+
+/* FUNÇÃO DESCONTINUADA.
 app.post('/pega-id-loja', (req, res) => {
     const email = req.body.email;
 
@@ -478,7 +479,7 @@ app.post('/pega-id-loja', (req, res) => {
             res.send(result[0])
         }
     })
-})
+})*/
 
 app.post("/cadastro", (req, res) => {
     email_global = req.body.email;
@@ -1717,23 +1718,32 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
 })
 
 //FUNCAO JÁ REESTRUTURADA. ESSA FUNÇÃO BUSCA TODOS OS PRODUTOS DE VEZ.
-app.post("/busca-produtos", autenticarToken, (req, res) =>{
-    const id_da_loja = req.body.id_da_loja; 
-    listaDosProdutos = []
-    console.log(`Buscou esse carai ${id_da_loja}`)
-    acessa_Database_Lojas.query(`SELECT * FROM produtos WHERE loja_id = ?`, [id_da_loja], (error, result) => {
-        if(error){
-            res.send("Erro!")
-            console.log(`Erro ao tentar buscar produtos. Erro: ${error}`)
-        }else{
-            for(i = 0; i < result.length; i++){
-                listaDosProdutos.push(result[i])
+app.post("/busca-produtos", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
+
+    console.log(`Buscando produtos da loja: ${id_da_loja}`);
+
+    acessa_Database_Lojas.query(
+        `SELECT * FROM produtos WHERE loja_id = ?`,
+        [id_da_loja],
+        (error, result) => {
+            if (error) {
+                console.error("Erro ao buscar produtos:", error);
+                return res.status(500).json({
+                    msg: "Erro interno do servidor."
+                });
+            }
+
+            if (result.length > 0) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(404).json({
+                    msg: "Nenhum produto encontrado para esta loja."
+                });
             }
         }
-        res.send(listaDosProdutos)
-    })
-    
-})
+    );
+});
 
 //PARTE DA COMANDA
 app.post("/cria-nova-comanda", autenticarToken, async (req, res) => {
@@ -1986,10 +1996,14 @@ app.post("/insere-itens-da-comanda", (req,res) => {
     //loja.query(`INSERT INTO ${comanda}(cod_produto,produto,unidades,preco) VALUES(cod_produto,produto,unidades,preco)`)
 })
 
+/*
+    PARA QUE ESTA FUNÇÃO FUNCIONE TANTO NA TELA DE VENDAS RÁPIDA(UTILIZA O EMAIL COMO COMANDA)
+    COMO NA TELA DE VENDAS POR COMANDA, VOU PRECISAR PASSAR A COMANDA COM NOME "COMANDA" INVÉS 
+    DE EMAIL ASSIM VAI FUNCIONAR EM AMBAS AS TELAS.
+*/
 app.post("/buscar-itens-comanda", autenticarToken, (req, res) => {
-    //ESSA FUNCAO É DA VENDA RÁPIDA, ENTÃO A COMANDA É O EMAIL.
     const id_da_loja = req.usuario.loja_id;
-    const comanda = req.usuario.email; // identificador da comanda vem do token!
+    const comanda = req.body.comanda; // identificador da comanda
 
     console.log(`Buscou itens da comanda. Loja: ${id_da_loja}, Comanda: ${comanda}`);
 
@@ -2026,6 +2040,7 @@ app.post("/buscar-itens-comanda", autenticarToken, (req, res) => {
         }
     );
 });
+
 
 /*VERSÃO SEM TOKEN
 app.post("/buscar-itens-comanda", (req,res) => {
