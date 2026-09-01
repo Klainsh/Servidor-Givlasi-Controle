@@ -482,6 +482,110 @@ app.post('/pega-id-loja', (req, res) => {
 })*/
 
 app.post("/cadastro", (req, res) => {
+    const { email, senha, nivel, cpf } = req.body;
+    const emailFormatado = email.trim().toLowerCase();
+
+    // 1. Inicia transação
+    acessa_Database_Lojas.getConnection((errConexao, conn) => {
+        if (errConexao) {
+            console.error("Erro ao obter conexão:", errConexao);
+            return res.status(500).json({ msg: "Erro interno do servidor." });
+        }
+
+        conn.beginTransaction(async (errTransaction) => {
+            if (errTransaction) {
+                conn.release();
+                return res.status(500).json({ msg: "Erro ao iniciar transação." });
+            }
+
+            try {
+                // ETAPA 1: Criar empresa provisória
+                conn.query(
+                    "INSERT INTO empresas (nome_fantasia, tipo_loja, cidade, estado) VALUES (?, ?, ?, ?)",
+                    ["Minha Empresa", "pdv", "Não Informada", "NI"],
+                    async (errEmpresa, empresaResult) => {
+                        if (errEmpresa) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                res.status(500).json({ msg: "Erro ao criar empresa." });
+                            });
+                        }
+
+                        const novoIdDaLoja = empresaResult.insertId;
+
+                        // ETAPA 2: Criptografar senha e criar usuário
+                        bcrypt.hash(senha, saltRounds, (erroHash, hash) => {
+                            if (erroHash) {
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    res.status(500).json({ msg: "Erro ao criptografar senha." });
+                                });
+                            }
+
+                            conn.query(
+                                "INSERT INTO contas_usuarios (id_da_loja, senha, email, nivel, cpf) VALUES (?, ?, ?, ?, ?)",
+                                [novoIdDaLoja, hash, emailFormatado, nivel, cpf],
+                                (errUsuario) => {
+                                    if (errUsuario) {
+                                        return conn.rollback(() => {
+                                            conn.release();
+
+                                            // Tratamento de duplicidade pelo índice único
+                                            if (errUsuario.code === "ER_DUP_ENTRY") {
+                                                return res.status(409).json({ msg: "Já existe uma conta cadastrada com este email!" });
+                                            }
+
+                                            res.status(500).json({ msg: "Erro ao criar usuário." });
+                                        });
+                                    }
+
+                                    // ETAPA 3: Inserir status inicial do plano
+                                    const dataFutura = calcularDataFutura(7);
+                                    const dataFuturaTratada = dataFutura.toISOString().split("T")[0];
+
+                                    conn.query(
+                                        "INSERT INTO status_planos (id_da_loja, email, metodo_de_pagamento, status, descricao_do_plano, preco, data_de_inicio, data_de_vencimento) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                        [novoIdDaLoja, emailFormatado, "indefinido", "ativo", "desbravador", 0.00, dataSistema(), dataFuturaTratada],
+                                        (errPlano) => {
+                                            if (errPlano) {
+                                                return conn.rollback(() => {
+                                                    conn.release();
+                                                    res.status(500).json({ msg: "Erro ao criar plano inicial." });
+                                                });
+                                            }
+
+                                            conn.commit((errCommit) => {
+                                                if (errCommit) {
+                                                    return conn.rollback(() => {
+                                                        conn.release();
+                                                        res.status(500).json({ msg: "Erro ao finalizar transação." });
+                                                    });
+                                                }
+
+                                                conn.release();
+                                                res.status(200).json({ msg: "Cadastrado com sucesso!" });
+                                            });
+                                        }
+                                    );
+                                }
+                            );
+                        });
+                    }
+                );
+            } catch (errInterno) {
+                conn.rollback(() => {
+                    conn.release();
+                    console.error("Erro interno:", errInterno);
+                    res.status(500).json({ msg: "Erro interno ao cadastrar." });
+                });
+            }
+        });
+    });
+});
+
+
+/*FUNÇÃO ANTIGA
+app.post("/cadastro", (req, res) => {
     email_global = req.body.email;
     const senha = req.body.senha;
     const email = req.body.email.trim().toLowerCase();
@@ -546,7 +650,7 @@ app.post("/cadastro", (req, res) => {
                             //INSERE O STATUS INICIAL DO PLANO DESBRAVADOR DA LOJA.
                             //Faço ele ao final, porque não interfere em nada no uso inicial do app cliente.
                             const dataFutura = calcularDataFutura(7)
-                            /*A função .toISOString() do JavaScript sempre converte a data para o fuso horário UTC (Horário de Londres/Greenwich). Como o Brasil está 3 horas atrás do UTC (fuso -3), se um lojista se cadastrar no seu sistema em um fim de noite (por exemplo, às 21h30 em Camaçari), o .toISOString() vai entender que já passou da meia-noite em Londres e vai pular o dia da data de vencimento uma diária para a frente por engano. */
+                            /*A função .toISOString() do JavaScript sempre converte a data para o fuso horário UTC (Horário de Londres/Greenwich). Como o Brasil está 3 horas atrás do UTC (fuso -3), se um lojista se cadastrar no seu sistema em um fim de noite (por exemplo, às 21h30 em Camaçari), o .toISOString() vai entender que já passou da meia-noite em Londres e vai pular o dia da data de vencimento uma diária para a frente por engano. /
                             //MAS VOU MANTER POR CONTA DA FUNCAO -DESBLOQUEIO DE CONFIANÇA- DO SISTEMA.
                             //MESMO QUE FIQUE UM DIA A MAIS OU A MENOS, O USUÁRIO TEM 7DIAS BÓNUS MESMO.
                             const dataFuturaTratada = (dataFutura.toISOString().split('T')[0])
@@ -584,10 +688,74 @@ app.post("/cadastro", (req, res) => {
             });
         });
     });
+});*/
+
+
+//NOVA FUNCAO REFATORADA COM TOKEN!
+app.post("/cadastrar-produto", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
+
+    const codigo_produto = req.body.codigo_produto;
+    const produto = req.body.produto;
+    const tamanho_produto = req.body.tamanho_produto;
+    const estoque = req.body.estoque;
+    const preco_compra = req.body.valor_de_compra;
+    const preco_venda = req.body.valor_de_venda;
+    const local_armazenamento = req.body.local_armazenamento;
+
+    //console.log(`Tentando cadastrar produto na loja: ${id_da_loja}`);
+
+    acessa_Database_Lojas.query(
+        `SELECT codigo_produto 
+         FROM produtos 
+         WHERE loja_id = ? AND codigo_produto = ?`,
+        [id_da_loja, codigo_produto],
+        (error, result) => {
+            if (error) {
+                console.error("Erro ao verificar produto existente:", error);
+                return res.status(500).json({ msg: "Erro interno do servidor." });
+            }
+
+            if (result.length > 0) {
+                return res.status(409).json({
+                    msg: "Já existe um produto cadastrado com esse código!"
+                });
+            }
+
+            acessa_Database_Lojas.query(
+                `INSERT INTO produtos
+                    (loja_id, codigo_produto, nome, tamanho, estoque, preco_compra, preco_venda, local_armazenamento) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    id_da_loja,
+                    codigo_produto,
+                    produto,
+                    tamanho_produto,
+                    estoque,
+                    preco_compra,
+                    preco_venda,
+                    local_armazenamento
+                ],
+                (error) => {
+                    if (error) {
+                        console.error("Erro ao cadastrar produto:", error);
+                        return res.status(500).json({
+                            msg: "Erro interno do servidor."
+                        });
+                    }
+
+                    console.log(`Novo produto cadastrado com sucesso na loja: ${id_da_loja}`);
+                    return res.status(200).json({
+                        msg: "Produto cadastrado com sucesso!"
+                    });
+                }
+            );
+        }
+    );
 });
 
 
-//NOVA FUNCAO REFATORADA!
+/*VERSÃO ANTERIOR SEM TOKEN
 app.post("/cadastrar-produto", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
 
@@ -620,7 +788,7 @@ app.post("/cadastrar-produto", (req,res) => {
             })
         }
     })
-})
+})*/
 
 //NOVA FUNCAO REFATORADA! CUIDADO AO USAR ESSA FUNÇÃO, TENHO OUTRA COM O NOME 'BUSCA_PRODUTOS' QUE É PARA BUSCAR A LISTA DOS MESMOS.
 //FUNÇÃO UTILIZANDO O TOKEN.
@@ -778,6 +946,65 @@ app.post("/buscar-produto", (req,res) => {
 
 //NOVA FUNCAO REFATORADA!
 //Fornece as informacoes dos produtos vendidos para a tela: Produtos Vendidos.
+app.post("/busca_produtos_vendidos_por_data", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
+    const { dataDia, dataMes, dataAno } = req.body;
+
+    let dataInicio, dataFim;
+
+    if (dataDia && dataMes && dataAno) {
+        // Busca por dia específico
+        dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
+        const fim = new Date(dataInicio);
+        fim.setDate(fim.getDate() + 1);
+        dataFim = fim.toISOString().slice(0, 10);
+
+    } else if (!dataDia && dataMes && dataAno) {
+        // Busca por mês e ano
+        dataInicio = `${dataAno}-${dataMes}-01`;
+        const fim = new Date(`${dataAno}-${dataMes}-01T00:00:00`);
+        fim.setMonth(fim.getMonth() + 1);
+        dataFim = fim.toISOString().slice(0, 10);
+
+    } else if (!dataDia && !dataMes && dataAno) {
+        // Busca por ano
+        dataInicio = `${dataAno}-01-01`;
+        dataFim = `${dataAno}-12-31`;
+    } else {
+        return res.status(400).json({ msg: "Parâmetros de data inválidos." });
+    }
+
+    const sql = `
+        SELECT 
+            vi.produto_id,
+            vi.produto_nome,
+            SUM(vi.quantidade) AS total_unidades,
+            SUM(vi.subtotal) AS faturamento,
+            SUM(vi.subtotal - vi.preco_compra) AS lucro
+        FROM vendas v
+        JOIN vendas_itens vi ON vi.venda_id = v.id
+        WHERE v.loja_id = ?
+        AND v.data_venda >= ?
+        AND v.data_venda < ?
+        GROUP BY vi.produto_id, vi.produto_nome
+        ORDER BY faturamento DESC;
+    `;
+
+    acessa_Database_Lojas.query(sql, [id_da_loja, dataInicio, dataFim], (error, result) => {
+        if (error) {
+            console.error("Erro ao buscar vendas:", error);
+            return res.status(500).json({ msg: "Erro interno do servidor." });
+        }
+
+        if (result.length === 0) {
+            return res.status(404).json({ msg: "Nenhuma venda encontrada no período informado." });
+        }
+
+        return res.status(200).json(result);
+    });
+});
+
+/*VERSÃO ANTIGA SEM TOKEN
 app.post("/busca_produtos_vendidos_por_data", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const dataDia = req.body.dataDia;
@@ -886,11 +1113,77 @@ app.post("/busca_produtos_vendidos_por_data", (req,res) => {
             }
         });
     }
-})
+})*/
 
 //NOVA FUNCAO REFATORADA!
 /*Fornece as informacoes de produtos ESPECIFICOS para a tela: Produtos Vendidos.
 AS VEZES O CLIENTE QUER BUSCAR PELO NOME OU CÓDIGO DO PRODUTO.*/
+app.post("/busca_produtos_vendidos_especificos_por_data", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
+    const { dataDia, dataMes, dataAno, produto, buscaPorCodigo } = req.body;
+
+    let dataInicio, dataFim;
+
+    if (dataDia && dataMes && dataAno) {
+        // Busca por dia
+        dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
+        const fim = new Date(dataInicio);
+        fim.setDate(fim.getDate() + 1);
+        dataFim = fim.toISOString().slice(0, 10);
+
+    } else if (!dataDia && dataMes && dataAno) {
+        // Busca por mês
+        dataInicio = `${dataAno}-${dataMes}-01`;
+        const fim = new Date(`${dataAno}-${dataMes}-01T00:00:00`);
+        fim.setMonth(fim.getMonth() + 1);
+        dataFim = fim.toISOString().slice(0, 10);
+
+    } else if (!dataDia && !dataMes && dataAno) {
+        // Busca por ano
+        dataInicio = `${dataAno}-01-01`;
+        dataFim = `${dataAno}-12-31`;
+
+    } else {
+        return res.status(400).json({ msg: "Parâmetros de data inválidos." });
+    }
+
+    // Monta filtro de produto
+    const filtroProduto = buscaPorCodigo
+        ? { sql: "AND vi.produto_nome LIKE ?", valor: `%${produto}%` }
+        : { sql: "AND vi.produto_id = ?", valor: produto };
+
+    const sql = `
+        SELECT 
+            vi.produto_id,
+            vi.produto_nome,
+            SUM(vi.quantidade) AS total_unidades,
+            SUM(vi.subtotal) AS faturamento,
+            SUM(vi.subtotal - vi.preco_compra) AS lucro
+        FROM vendas v
+        JOIN vendas_itens vi ON vi.venda_id = v.id
+        WHERE v.loja_id = ?
+        AND v.data_venda >= ?
+        AND v.data_venda < ?
+        ${filtroProduto.sql}
+        GROUP BY vi.produto_id, vi.produto_nome
+        ORDER BY faturamento DESC;
+    `;
+
+    acessa_Database_Lojas.query(sql, [id_da_loja, dataInicio, dataFim, filtroProduto.valor], (error, result) => {
+        if (error) {
+            console.error("Erro ao buscar vendas:", error);
+            return res.status(500).json({ msg: "Erro interno do servidor." });
+        }
+
+        if (result.length === 0) {
+            return res.status(404).json({ msg: "Nenhuma venda encontrada no período informado." });
+        }
+
+        return res.status(200).json(result);
+    });
+});
+
+/*VERSÃO ANTIGA
 app.post("/busca_produtos_vendidos_especificos_por_data", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const dataDia = req.body.dataDia;
@@ -1090,7 +1383,7 @@ app.post("/busca_produtos_vendidos_especificos_por_data", (req,res) => {
  
         
     }
-})
+})*/
 
 
 //DESCONTINUADA, PODE EXCLUIR.
@@ -1597,108 +1890,148 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
 })
 
 //FUNCAO REFATORADA.
-app.post("/adicionar-estoque", (req, res) =>{ 
-    const id_da_loja = req.body.id_da_loja;
+app.post("/adicionar-estoque", autenticarToken, (req, res) => { 
+    const id_da_loja = req.usuario.loja_id; // vem do token
     const codigoProduto = req.body.codigoProduto;
     const novoEstoque = req.body.novoEstoque;
 
-    acessa_Database_Lojas.query(`UPDATE produtos SET estoque = estoque + ?
-                                WHERE loja_id = ? AND codigo_produto = ?;`,
-                                [novoEstoque, id_da_loja, codigoProduto], (error) => {
-        if(error){
-            res.send("Erro!")
-            console.log(`Erro ao tentar alterar o estoque. Erro: ${error}`)
-        }else{
-            res.send("Sucesso!")
-            //busca estoque atualizado
+    acessa_Database_Lojas.query(
+        `UPDATE produtos 
+         SET estoque = estoque + ?
+         WHERE loja_id = ? AND codigo_produto = ?;`,
+        [novoEstoque, id_da_loja, codigoProduto],
+        (error) => {
+            if (error) {
+                console.error("Erro ao tentar alterar o estoque:", error);
+                return res.status(500).json({ msg: "Erro interno do servidor." });
+            }
+
+            // Busca estoque atualizado
             acessa_Database_Lojas.query(
-                `SELECT estoque FROM produtos
-                WHERE loja_id = ? AND codigo_produto = ?`,
+                `SELECT estoque 
+                 FROM produtos
+                 WHERE loja_id = ? AND codigo_produto = ?`,
                 [id_da_loja, codigoProduto],
                 (err2, result) => {
+                    if (err2) {
+                        console.error("Erro ao buscar estoque atualizado:", err2);
+                        return res.status(500).json({ msg: "Erro interno do servidor." });
+                    }
+
+                    if (result.length === 0) {
+                        return res.status(404).json({ msg: "Produto não encontrado." });
+                    }
 
                     const estoqueAtual = result[0].estoque;
 
-                    //res.send("Sucesso!");
-                    //Envio o sinal socket.io
+                    // Envia sinal via socket.io
                     io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
+                        codigoProduto,
+                        estoque: estoqueAtual
+                    });
+
+                    console.log(`Estoque atualizado para produto ${codigoProduto} na loja ${id_da_loja}: ${estoqueAtual}`);
+
+                    return res.status(200).json({
+                        msg: "Estoque atualizado com sucesso!",
                         codigoProduto,
                         estoque: estoqueAtual
                     });
                 }
             );
-            /*
-            // Depois que o banco confirma, emite evento
-            io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
-                codigoProduto
-            });*/
         }
-    })   
-})
+    );   
+});
 
-app.post("/remover-estoque", (req, res) =>{
-    const id_da_loja = req.body.id_da_loja;
+app.post("/remover-estoque", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
     const codigoProduto = req.body.codigoProduto;
     const novoEstoque = req.body.novoEstoque;
 
-    acessa_Database_Lojas.query(`UPDATE produtos SET estoque = estoque - ?
-                            WHERE loja_id = ? AND codigo_produto = ? AND estoque >= ?;`,
-                            [novoEstoque, id_da_loja, codigoProduto, novoEstoque], (error) => {
-    if(error){
-        console.log(`Erro ao tentar alterar o estoque da loja: ${id_da_loja}. Erro: ${error}`)
-        return res.send("Erro!");
-    }if(res.affectedRows === 0) {
-        // Estoque insuficiente
-        return res.send("Estoque insuficiente!");
-    }else{
-        res.send("Sucesso!")
-        //busca estoque atualizado
-        acessa_Database_Lojas.query(
-            `SELECT estoque FROM produtos
-            WHERE loja_id = ? AND codigo_produto = ?`,
-            [id_da_loja, codigoProduto],
-            (err2, result) => {
-
-                const estoqueAtual = result[0].estoque;
-
-                //res.send("Sucesso!");
-
-                io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
-                    codigoProduto,
-                    estoque: estoqueAtual
-                });
+    acessa_Database_Lojas.query(
+        `UPDATE produtos 
+         SET estoque = estoque - ?
+         WHERE loja_id = ? AND codigo_produto = ? AND estoque >= ?;`,
+        [novoEstoque, id_da_loja, codigoProduto, novoEstoque],
+        (error, result) => {
+            if (error) {
+                console.error(`Erro ao tentar alterar o estoque da loja ${id_da_loja}:`, error);
+                return res.status(500).json({ msg: "Erro interno do servidor." });
             }
-        );
-        /*
-        // Depois que o banco confirma, emite evento
-        io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
-            codigoProduto
-        });*/
-    }
-    })
-    
-})
 
-app.post("/deletar-produto", (req, res) =>{
-    const id_da_loja = req.body.id_da_loja;
+            if (result.affectedRows === 0) {
+                // Estoque insuficiente ou produto não encontrado
+                return res.status(409).json({ msg: "Estoque insuficiente ou produto não encontrado." });
+            }
+
+            // Busca estoque atualizado
+            acessa_Database_Lojas.query(
+                `SELECT estoque 
+                 FROM produtos
+                 WHERE loja_id = ? AND codigo_produto = ?`,
+                [id_da_loja, codigoProduto],
+                (err2, result2) => {
+                    if (err2) {
+                        console.error("Erro ao buscar estoque atualizado:", err2);
+                        return res.status(500).json({ msg: "Erro interno do servidor." });
+                    }
+
+                    if (result2.length === 0) {
+                        return res.status(404).json({ msg: "Produto não encontrado." });
+                    }
+
+                    const estoqueAtual = result2[0].estoque;
+
+                    // Envia sinal via socket.io
+                    io.to(`loja_${id_da_loja}`).emit("estoque_atualizado", {
+                        codigoProduto,
+                        estoque: estoqueAtual
+                    });
+
+                    console.log(`Estoque atualizado para produto ${codigoProduto} na loja ${id_da_loja}: ${estoqueAtual}`);
+
+                    return res.status(200).json({
+                        msg: "Estoque removido com sucesso!",
+                        codigoProduto,
+                        estoque: estoqueAtual
+                    });
+                }
+            );
+        }
+    );
+});
+
+app.post("/deletar-produto", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token
     const codigoProduto = req.body.codigoProduto;
 
-    acessa_Database_Lojas.query(`DELETE FROM produtos WHERE loja_id = ? AND codigo_produto = ?`,
-                            [id_da_loja, codigoProduto], (error, result) => {
-        if(error){
-            console.log(`Erro ao tentar alterar o estoque da loja: ${id_da_loja}. Erro: ${error}`)
-            return res.send("Erro!");
-        }else if(result.affectedRows === 0) {
-            // Estoque insuficiente
-            return res.send("Produto não encontrado!");
-        }else{
-            res.send("Sucesso!")
-            //AQUI EU ENVIO O SOCKET QUE FALA QUE UM PRODUTO FOI REMOVIDO.
-        }
-    })
-    
-})
+    acessa_Database_Lojas.query(
+        `DELETE FROM produtos WHERE loja_id = ? AND codigo_produto = ?`,
+        [id_da_loja, codigoProduto],
+        (error, result) => {
+            if (error) {
+                console.error(`Erro ao tentar deletar produto da loja ${id_da_loja}:`, error);
+                return res.status(500).json({ msg: "Erro interno do servidor." });
+            }
 
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ msg: "Produto não encontrado." });
+            }
+
+            console.log(`Produto ${codigoProduto} removido da loja ${id_da_loja}`);
+
+            // Envia sinal via socket.io
+            io.to(`loja_${id_da_loja}`).emit("produto_removido", {
+                codigoProduto
+            });
+
+            return res.status(200).json({
+                msg: "Produto removido com sucesso!",
+                codigoProduto
+            });
+        }
+    );
+});
 
 app.post("/alterar-valor-compra-e-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
