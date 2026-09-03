@@ -388,57 +388,13 @@ app.post("/login", (req, res) => {
     );
 });
 
-/* VERSÃO ANTERIOR DO LOGIN
-app.post("/login", (req, res) => {
-    const email = req.body.email;
-    const senha = req.body.senha;
-    console.log(`${email} solicitou login.`);
-
-    acessa_Database_Lojas.query("SELECT * FROM contas_usuarios WHERE email = ?", [email], (err, result) => {
-        if (err) {
-            return res.send(err); // O return evita que o código continue executando se der erro no banco
-        } 
-        
-        if (result.length > 0) {
-            // Alterei o nome da variável interna de 'result' para 'senhaBateu' para não embolar com o resultado do banco
-            bcrypt.compare(senha, result[0].senha, (erro, senhaBateu) => {
-                if (erro) {
-                    return res.send(erro);
-                }
-
-                if (senhaBateu) {
-                    // 1. Prepara os dados que ficarão escondidos matematicamente dentro do token
-                    // ATENÇÃO: Certifique-se de que o nome da coluna no seu banco seja exatamente 'loja_id'
-                    const dadosParaOConfigurar = { 
-                        email: result[0].email, 
-                        loja_id: result[0].id_da_loja,
-                        nivel: result[0].nivel //O NÍVEL DE ACESSO DA CONTA QUE ESTÁ LOGANDO.
-                    };
-
-                    // 2. Gera o Token configurado para expirar em 7 dias
-                    // --- ATENÇÃO, NÃO COLOCAR DADOS SENSIVEIS DENTRO DO TOKEN ---
-                    const token = jwt.sign(dadosParaOConfigurar, CHAVE_SECRETA, { expiresIn: '7d' });
-
-                    // 3. Devolve a resposta unificada. Seus sistemas continuam recebendo a msg de sucesso,
-                    // mas agora levam também o token, o email e o loja_id para usar nas telas!
-                    res.send({
-                        msg: "Usuário logado com sucesso!",
-                        token: token,
-                        email: result[0].email,
-                        id_da_loja: result[0].id_da_loja,
-                        nivel: result[0].nivel
-                    });
-
-                } else {
-                    res.send({ msg: "A senha está incorreta!" });
-                }
-            });
-        } else {
-            res.send({ msg: "Nenhuma conta encontrada com este email!" });
-        }
+// Rota de auto-login
+app.post('/auto-login', autenticarToken, (req, res) => {
+    // Se chegou aqui, o token foi validado
+    return res.status(200).json({
+        msg: "Token válido. Login automático permitido."
     });
 });
-*/
 
 //FUNÇÃO CHAMADA PARA VERIFICAR NIVEL DE ACESSO, E PERMITIR O USUÁRIO ACESSAR UM LOCAL.
 app.post("/verificar-acesso", autenticarToken, (req, res) => {
@@ -2033,6 +1989,35 @@ app.post("/deletar-produto", autenticarToken, (req, res) => {
     );
 });
 
+app.post("/alterar-valor-compra-e-venda", autenticarToken, (req, res) => {
+    const id_da_loja = req.usuario.loja_id; // vem do token validado
+    const { codigo_produto, novoValorDeCompra, novoValorDeVenda } = req.body;
+    // Validação básica
+    if (!codigo_produto || isNaN(novoValorDeCompra) || isNaN(novoValorDeVenda)) {
+        return res.status(400).json({ erro: "Dados inválidos" });
+    }
+
+    const query = `
+        UPDATE produtos 
+        SET preco_compra = ?, preco_venda = ? 
+        WHERE loja_id = ? AND codigo_produto = ?
+    `;
+
+    acessa_Database_Lojas.query(query, [novoValorDeCompra, novoValorDeVenda, id_da_loja, codigo_produto], (error, result) => {
+        if (error) {
+            console.error(`Erro ao alterar valores: ${error}`);
+            return res.status(500).json({ erro: "Erro interno ao atualizar valores" });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ erro: "Produto não encontrado" });
+        }
+
+        res.status(200).json({ mensagem: "Valores atualizados com sucesso" });
+    });
+});
+
+/*FUNÇÃO ANTIGA
 app.post("/alterar-valor-compra-e-venda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     const codigoProduto = req.body.codigo_produto;
@@ -2048,7 +2033,7 @@ app.post("/alterar-valor-compra-e-venda", (req,res) => {
             res.send("Sucesso!")
         }
     })
-})
+})*/
 
 //FUNCAO JÁ REESTRUTURADA. ESSA FUNÇÃO BUSCA TODOS OS PRODUTOS DE VEZ.
 app.post("/busca-produtos", autenticarToken, (req, res) => {
