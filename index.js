@@ -16,6 +16,7 @@ const CHAVE_SECRETA = "GivlasiEstaEntrandoEmOutroPatamar!#&40028922";
 
 //LOGO APÓS LANÇAR A NOVA VERSÃO, IREI INICIAR A REESTRUTURAÇÃO DE TODO O SERVIDOR, ORGANIZADO!!!
 
+//----------------------------------------------------------------------------------------------------
 /*PARTE DO SOCKET.IO*/
 const http = require("http");
 const { Server } = require("socket.io");
@@ -26,26 +27,179 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-/* ESSA PARTE DO IO ESTÁ VULNERÁVEL! DEPOIS ATUALIZAR PARA TOKEN
-    // Exemplo de barreira de segurança no Socket.io
-    io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (validarTokenJWT(token)) {
-        next(); // Permite a conexão
-    } else {
-        next(new Error("Não autorizado")); // Bloqueia a conexão na hora
-    }
-    });
-*/
-
 //NOVA VERSÃO:
 /*  ATUALIZADA PARA REGISTRAR OS DADOS DOS DISPOSITIVOS 
                     & 
     CRIAR EVENTOS DE COMUNICAÇÃO DIRETA 
 */
 // Objeto na memória do servidor para saber quem é quem por loja
+// Middleware global de autenticação do SOCKET
+io.use((socket, next) => {
+    //console.log("Handshake recebido:", socket.handshake.auth);
+    const token = socket.handshake.auth?.token;
+    if (!token) {
+        return next(new Error("Token não fornecido"));
+    }
+
+    try {
+        const decoded = jwt.verify(token, CHAVE_SECRETA);//aqui preciso usar a mesma chave do servidor.
+        socket.usuario = decoded;
+        //console.log("Token válido:", decoded); 
+        next();
+    } catch (err) {
+        console.log("Erro ao validar token:", err.message);
+        return next(new Error("Token inválido"));
+    }
+});
+
 const caixasAtivos = {}; 
 
+io.on("connection", (socket) => {
+    console.log("Cliente conectado:", socket.id); 
+
+    const loja_id = socket.usuario.loja_id;
+    const usuarioMinusculo = String(socket.usuario.id_usuario).toLowerCase();
+    //const tipo = socket.usuario.tipo; // 'desktop' ou 'mobile' modelo antes do socket
+    const tipo = socket.handshake.auth.tipo; // 'desktop' ou 'mobile'
+
+    // 1. Entra na sala global da loja
+    socket.join(`loja_${loja_id}`);
+
+    // 2. Sala exclusiva do usuário
+    socket.join(`loja_${loja_id}_usuario_${usuarioMinusculo}`);
+
+    socket.id_loja = loja_id;
+    socket.id_usuario = usuarioMinusculo;
+    socket.tipo = tipo;
+
+    // Se for um computador, registramos que este caixa está online
+    if (tipo === 'desktop') {
+        if (!caixasAtivos[loja_id]) caixasAtivos[loja_id] = {};
+        caixasAtivos[loja_id][usuarioMinusculo] = socket.id;
+        console.log(`Desktop do usuário ${usuarioMinusculo} pronto na loja ${loja_id}`);
+    }
+
+    // Venda finalizada
+    socket.on("venda_finalizada_sucesso", (dados) => {
+        const { numero_comanda, dados_painel_global } = dados;
+
+        console.log(`> Venda finalizada: Loja ${loja_id} | Caixa: ${usuarioMinusculo} | Comanda: ${numero_comanda}`);
+
+        // Canal privado: limpar tela do usuário
+        socket.to(`loja_${loja_id}_usuario_${usuarioMinusculo}`).emit("comando_limpar_tela_venda", {
+            numero_comanda
+        });
+
+        // Canal global: atualizar painel da loja
+        /*
+        io.to(`loja_${loja_id}`).emit("painel_loja_atualizar_dados", {
+            tipo: "ATUALIZACAO_FLUXO",
+            dados: dados_painel_global
+        });
+        */
+    });
+
+    // Mobile pede itens da venda rápida
+    socket.on("solicitar_itens_venda", () => {
+        console.log("CELULAR SOLICITOU");
+
+        const socketIdDesktop = caixasAtivos[loja_id]?.[usuarioMinusculo];
+        console.log(`loja_id: ${loja_id} | id_usuario: ${usuarioMinusculo} | socketIdDesktop: ${socketIdDesktop}`);
+
+        if (socketIdDesktop) {
+            io.to(socketIdDesktop).emit("desktop_enviar_itens", { socket_mobile_id: socket.id });
+        } else {
+            console.log("Computador não encontrado!");
+            socket.emit("venda_dados_resposta", { status: "OFFLINE", itens: [] });
+        }
+    });
+
+    // Desktop responde com itens
+    socket.on("desktop_respondeu_itens", (dados) => {
+        const { socket_mobile_id, status, itens } = dados;
+        io.to(socket_mobile_id).emit("venda_dados_resposta", { status, itens });
+    });
+
+    // Desktop atualizou venda
+    socket.on("desktop_atualizou_venda", (dados) => {
+        const { itens } = dados;
+
+        console.log(`> Caixa ${usuarioMinusculo} da Loja ${loja_id} alterou o carrinho. Transmitindo...`);
+
+        socket.to(`loja_${loja_id}`).emit("venda_atualizada_pelo_desktop", {
+            status: "SUCESSO",
+            id_usuario: usuarioMinusculo,
+            itens
+        });
+    });
+
+    // Mobile atualizou venda
+    socket.on("mobile_atualizou_venda", (dados) => {
+        const { itens } = dados;
+        const socketIdDesktop = caixasAtivos[loja_id]?.[usuarioMinusculo];
+
+        console.log(`> Celular de ${usuarioMinusculo} atualizou a venda. Repassando ao Desktop...`);
+
+        if (socketIdDesktop) {
+            io.to(socketIdDesktop).emit("desktop_receber_atualizacao_mobile", { itens });
+        } else {
+            console.log(`> Computador de ${usuarioMinusculo} não encontrado para receber a atualização.`);
+        }
+    });
+
+    // Limpeza ao desconectar
+    socket.on("disconnect", () => {
+        if (socket.tipo === "desktop" && caixasAtivos[socket.id_loja]) {
+            delete caixasAtivos[socket.id_loja][socket.id_usuario];
+        }
+        console.log("Cliente desconectado:", socket.id);
+    });
+
+    // Relatórios globais
+    socket.on("listar_todos_usuarios_globais", () => {
+        console.log("-> SERVIDOR RECEBEU O COMANDO DO JAVA!");
+        const todosOsSocketsNativos = io.sockets.sockets;
+
+        console.log(`\n=== RELATÓRIO GLOBAL: ${todosOsSocketsNativos.size} CONEXÕES ATIVAS ===`);
+        todosOsSocketsNativos.forEach((s) => {
+            if (s.id_loja) {
+                console.log(`> Loja: ${s.id_loja} | Usuário: ${s.id_usuario} | Dispositivo: ${s.tipo?.toUpperCase()} | SocketID: ${s.id}`);
+            } else {
+                console.log(`> Dispositivo não identificado (SocketID: ${s.id})`);
+            }
+        });
+        console.log("===================================================\n");
+    });
+
+    socket.on("listar_todas_salas", () => {
+        console.log("-> SERVIDOR RECEBEU O COMANDO PARA LISTAR SALAS!");
+        const salas = io.sockets.adapter.rooms;
+        const todosOsSocketsNativos = io.sockets.sockets;
+
+        console.log("\n================ RELATÓRIO DE SALAS ================");
+        salas.forEach((setDeSockets, nomeDaSala) => {
+            if (!todosOsSocketsNativos.has(nomeDaSala)) {
+                const totalConectados = setDeSockets.size;
+                console.log(`\nSala: [ ${nomeDaSala} ] | Total de Sockets: ${totalConectados}`);
+
+                setDeSockets.forEach((socketId) => {
+                    const s = todosOsSocketsNativos.get(socketId);
+                    if (s) {
+                        if (s.id_loja) {
+                            console.log(`  > Loja: ${s.id_loja} | Usuário: ${s.id_usuario} | Dispositivo: ${s.tipo?.toUpperCase()} | SocketID: ${s.id}`);
+                        } else {
+                            console.log(`  > Dispositivo não identificado (SocketID: ${s.id})`);
+                        }
+                    }
+                });
+            }
+        });
+        console.log("\n===================================================\n");
+    });
+});
+
+
+/*
 io.on("connection", (socket) => {
     console.log("Cliente conectado:", socket.id); 
     // Agora recebemos um objeto com mais detalhes
@@ -84,13 +238,6 @@ io.on("connection", (socket) => {
         socket.to(`loja_${id_loja}_usuario_${usuarioMinusculo}`).emit("comando_limpar_tela_venda", {
             numero_comanda: numero_comanda
         });
-
-        // CANAL 2: GLOBAL - Notifica a loja INTEIRA para atualizar estoques e faturamentos em tempo real
-        /*
-        io.to(`loja_${id_loja}`).emit("painel_loja_atualizar_dados", {
-            tipo: "ATUALIZACAO_FLUXO",
-            dados: dados_painel_global // Ex: { total_venda: 150.00, produtos_abaixados: [...] }
-        });*/
     });
 
     // 1º GATILHO: Mobile pede os dados da venda rápida
@@ -222,10 +369,10 @@ io.on("connection", (socket) => {
 
         console.log("\n===================================================\n");
     });
-    /*FIM SOCKET.IO*/
+    
 
-});
-
+});*//*FIM SOCKET.IO*/
+//----------------------------------------------------------------------------------------------------
 
 
     
@@ -403,7 +550,7 @@ app.post("/verificar-acesso", autenticarToken, (req, res) => {
 
     // Exemplo simples: só nível 2 acessa controle-da-loja
     if (recurso === "controle-da-loja") {
-        if (nivel === 2) {
+        if (nivel => 2) { // terei que mudar para igual ou maior que 2
             return res.status(200).json({ acesso: true });
         } else {
             return res.status(403).json({ acesso: false, msg: "Você não tem permissão para acessar esta tela." });
@@ -438,7 +585,7 @@ app.post('/pega-id-loja', (req, res) => {
 })*/
 
 app.post("/cadastro", (req, res) => {
-    const { email, senha, nivel, cpf } = req.body;
+    const { email, senha, nivel, cpf } = req.body;//DEPOIS VOU ADICIONAR O NÍVEL DIRETAMENTE AQUI.
     const emailFormatado = email.trim().toLowerCase();
 
     // 1. Inicia transação
@@ -1750,6 +1897,33 @@ app.post("/finalizar-comanda", (req, res) => {
 });*/
 
 //FUNCAO JA REFATORADA.
+app.post("/busca-Vendas-Do-Dia", autenticarToken, (req, res) => {
+  const id_da_loja = req.usuario.loja_id; // vem direto do token
+
+  acessa_Database_Lojas.query(
+    `SELECT SUM(total) AS faturamento, SUM(custo_total) AS custo
+     FROM vendas 
+     WHERE loja_id = ? AND data_venda = CURDATE();`,
+    [id_da_loja],
+    (error, result) => {
+      if (error) {
+        console.error("Erro ao somar total de vendas:", error);
+        return res.status(500).json({ msg: "Erro interno do servidor." });
+      }
+
+      if (result && result.length > 0 && (result[0].faturamento || result[0].custo)) {
+        return res.status(200).json({
+          faturamento: result[0].faturamento || 0,
+          custo: result[0].custo || 0,
+        });
+      } else {
+        return res.status(404).json({ msg: "Nenhum faturamento hoje." });
+      }
+    }
+  );
+});
+
+/*
 app.post("/busca-Vendas-Do-Dia", (req,res) => { 
     const id_da_loja = req.body.id_da_loja;
     
@@ -1770,10 +1944,61 @@ app.post("/busca-Vendas-Do-Dia", (req,res) => {
         }
 
     })
-})
+})*/
 
 //Essa função é a utilizada na tela faturamento e lucro
 //FUNCAO JÁ REFATORADA.
+app.post("/busca-Vendas-Por-Data", autenticarToken, (req, res) => {
+  const id_da_loja = req.usuario.loja_id;
+  const { dataDia, dataMes, dataAno } = req.body;
+
+  if (!dataAno) {
+    return res.status(400).json({ msg: "Parâmetros de data inválidos." });
+  }
+
+  let dataInicio, dataFim;
+
+  if (dataDia && dataMes && dataAno) {
+    // Busca por dia
+    dataInicio = `${dataAno}-${dataMes}-${dataDia}`;
+    dataFim = dataInicio; // mesmo dia
+  } else if (dataMes && dataAno) {
+    // Busca por mês
+    dataInicio = `${dataAno}-${dataMes}-01`;
+    const fim = new Date(dataInicio);
+    fim.setMonth(fim.getMonth() + 1);
+    fim.setDate(fim.getDate() - 1); // último dia do mês
+    dataFim = fim.toISOString().slice(0, 10);
+  } else {
+    // Busca por ano
+    dataInicio = `${dataAno}-01-01`;
+    dataFim = `${dataAno}-12-31`; // último dia do ano
+  }
+
+  acessa_Database_Lojas.query(
+    `SELECT SUM(total) AS faturamento, SUM(custo_total) AS custo
+     FROM vendas
+     WHERE loja_id = ? AND data_venda BETWEEN ? AND ?`,
+    [id_da_loja, dataInicio, dataFim],
+    (error, result) => {
+      if (error) {
+        console.error("Erro ao buscar vendas:", error);
+        return res.status(500).json({ msg: "Erro interno do servidor." });
+      }
+
+      if (result && result.length > 0 && (result[0].faturamento || result[0].custo)) {
+        return res.status(200).json({
+          faturamento: result[0].faturamento || 0,
+          custo: result[0].custo || 0,
+        });
+      } else {
+        return res.status(404).json({ msg: "Nenhuma venda encontrada no período informado." });
+      }
+    }
+  );
+});
+
+/*FUNCAO ANTIGA
 app.post("/busca-Vendas-Por-Data", (req, res) =>{
     const id_da_loja = req.body.id_da_loja;
     const dataDia = req.body.dataDia;
@@ -1843,7 +2068,7 @@ app.post("/busca-Vendas-Por-Data", (req, res) =>{
             }
         });
     }
-})
+})*/
 
 //FUNCAO REFATORADA.
 app.post("/adicionar-estoque", autenticarToken, (req, res) => { 
@@ -1903,6 +2128,8 @@ app.post("/remover-estoque", autenticarToken, (req, res) => {
     const id_da_loja = req.usuario.loja_id; // vem do token
     const codigoProduto = req.body.codigoProduto;
     const novoEstoque = req.body.novoEstoque;
+    console.log(`DADOS: ${id_da_loja}, codigoProduto: ${codigoProduto}, novoEstoque: ${novoEstoque}`)
+    console.log("Body recebido:", req.body);
 
     acessa_Database_Lojas.query(
         `UPDATE produtos 
