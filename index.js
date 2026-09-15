@@ -2474,6 +2474,53 @@ app.post("/excluir-comanda", (req, res) => {
     })
 })
 
+// Rota protegida: só acessa se o token for válido
+app.post("/buscar-comandas-abertas", autenticarToken, (req, res) => {
+    try {
+        // O id_da_loja agora vem do token validado
+        const loja_id = req.usuario.loja_id;
+
+        acessa_Database_Lojas.query(
+            `SELECT 
+                m.id,
+                m.identificador,
+                m.venda_id,
+                m.criada_em
+             FROM mesas m
+             WHERE m.loja_id = ?;`,
+            [loja_id],
+            (error, result) => {
+                if (error) {
+                    console.error("Erro ao buscar comandas:", error);
+                    return res.status(500).json({
+                        success: false,
+                        message: "Erro interno ao buscar comandas abertas."
+                    });
+                }
+
+                if (result.length > 0) {
+                    return res.status(200).json({
+                        success: true,
+                        comandas: result
+                    });
+                } else {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Nenhuma comanda aberta encontrada."
+                    });
+                }
+            }
+        );
+    } catch (err) {
+        console.error("Erro inesperado:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Erro inesperado no servidor."
+        });
+    }
+});
+
+/*FUNCAO ANTIGA
 app.post("/buscar-comandas-abertas", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
     //const novaComanda = req.body.novaComanda;
@@ -2500,7 +2547,7 @@ app.post("/buscar-comandas-abertas", (req,res) => {
         }
     })
 
-})
+})*/
 
 app.post("/insere-itens-da-comanda", (req,res) => {
     const id_da_loja = req.body.id_da_loja;
@@ -2623,6 +2670,176 @@ app.post("/buscar-itens-comanda", (req,res) => {
 //FIM PARTE DA COMANDA
 
 //COMANDA REFATORADA:
+app.post("/inserir-itens-comanda", autenticarToken, (req, res) => {   
+    const loja_id = req.usuario.loja_id; 
+    const venda_id = req.body.venda_id;   
+    const comanda = req.body.comanda;   
+
+    console.log(`INSERINDO ITENS NA COMANDA | Loja: ${loja_id} | venda_id: ${venda_id} | itens: ${comanda.length}`);
+
+    acessa_Database_Lojas.getConnection((err, conn) => {
+        if (err) { 
+            console.error("Erro conexão:", err);
+            return res.status(500).json({ msg: "Erro na conexão com o banco." });
+        }
+
+        conn.beginTransaction(err => {
+            if (err) {
+                conn.release();
+                return res.status(500).json({ msg: "Erro ao iniciar transação." });
+            }
+
+            // 1️⃣ Busca estado atual da venda
+            conn.query(`
+                SELECT produto_id, quantidade
+                FROM vendas_itens
+                WHERE venda_id = ?
+            `, [venda_id], (erro, antigos) => {
+                if (erro) {
+                    return conn.rollback(() => {
+                        conn.release();
+                        console.error("Erro buscar itens antigos:", erro);
+                        res.status(500).json({ msg: "Erro ao buscar itens antigos." });
+                    });
+                }
+
+                const antigosMap = {};
+                antigos.forEach(i => antigosMap[i.produto_id] = i.quantidade);
+                const novosIds = comanda.map(p => p.produto_id);
+
+                let processados = 0;
+
+                const finalizar = () => {
+                    conn.commit(err => {
+                        if (err) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.error("Erro commit:", err);
+                                res.status(500).json({ msg: "Erro ao finalizar transação." });
+                            });
+                        }
+                        conn.release();
+                        res.status(200).json({ msg: "Comanda atualizada com sucesso." });
+                    });
+                };
+
+                if (comanda.length === 0) {
+                    // Remove tudo se esvaziou a mesa
+                    conn.query(`DELETE FROM vendas_itens WHERE venda_id = ?`, [venda_id], erro => {
+                        if (erro) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.error("Erro limpar comanda:", erro);
+                                res.status(500).json({ msg: "Erro ao limpar comanda." });
+                            });
+                        }
+                        return finalizar();
+                    });
+                    return;
+                }
+
+                // 2️⃣ Insere ou atualiza cada item
+                comanda.forEach(prod => {
+                    const qtdAntiga = antigosMap[prod.produto_id] || 0;
+                    const delta = prod.quantidade - qtdAntiga;
+                    const subtotal = prod.quantidade * prod.preco_venda;
+
+                    conn.query(`
+                        INSERT INTO vendas_itens
+                        (venda_id, produto_id, produto_nome, quantidade, preco_venda, preco_compra, subtotal)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                            quantidade = VALUES(quantidade),
+                            subtotal = VALUES(subtotal)
+                    `, [
+                        venda_id,
+                        prod.produto_id,
+                        prod.produto_nome,
+                        prod.quantidade,
+                        prod.preco_venda,
+                        prod.preco_compra,
+                        subtotal 
+                    ], erro => {
+                        if (erro) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                console.error("Erro salvar item:", erro);
+                                res.status(500).json({ msg: "Erro ao salvar item da comanda." });
+                            });
+                        }
+
+                        // 3️⃣ Ajusta estoque pelo delta
+                        if (delta !== 0) {
+                            conn.query(`
+                                UPDATE produtos
+                                SET estoque = estoque - ?
+                                WHERE loja_id = ?
+                                AND codigo_produto = ?
+                            `, [delta, loja_id, prod.produto_id], erro => {
+                                if (erro) {
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        console.error("Erro atualizar estoque:", erro);
+                                        res.status(500).json({ msg: "Erro ao atualizar estoque." });
+                                    });
+                                }
+                                checarFinalizacao();
+                            });
+                        } else {
+                            checarFinalizacao();
+                        }
+                    });
+                });
+
+                // 4️⃣ Remove produtos que saíram da comanda
+                antigos.forEach(old => {
+                    if (!novosIds.includes(old.produto_id)) {
+                        conn.query(`
+                            DELETE FROM vendas_itens
+                            WHERE venda_id = ?
+                            AND produto_id = ?
+                        `, [venda_id, old.produto_id], erro => {
+                            if (erro) {
+                                return conn.rollback(() => {
+                                    conn.release();
+                                    console.error("Erro remover item:", erro);
+                                    res.status(500).json({ msg: "Erro ao remover item da comanda." });
+                                });
+                            }
+
+                            // devolve estoque
+                            conn.query(`
+                                UPDATE produtos
+                                SET estoque = estoque + ?
+                                WHERE loja_id = ?
+                                AND codigo_produto = ?
+                            `, [old.quantidade, loja_id, old.produto_id], erro => {
+                                if (erro) {
+                                    return conn.rollback(() => {
+                                        conn.release();
+                                        console.error("Erro devolver estoque:", erro);
+                                        res.status(500).json({ msg: "Erro ao devolver estoque." });
+                                    });
+                                }
+                                checarFinalizacao();
+                            });
+                        });
+                    }
+                });
+
+                function checarFinalizacao() {
+                    processados++;
+                    const totalEsperado = comanda.length + antigos.filter(a => !novosIds.includes(a.produto_id)).length;
+                    if (processados === totalEsperado) {
+                        finalizar();
+                    }
+                }
+            });
+        });
+    });
+});
+
+/*
 app.post("/Inserir-itens-comanda", (req, res) => {   
     const loja_id = req.body.loja_id; 
     const venda_id = req.body.venda_id;   
@@ -2810,7 +3027,7 @@ app.post("/Inserir-itens-comanda", (req, res) => {
 
         });
     });
-});
+});*/
 
 /*FUNCAO UTILIZADA NO MOBILE AO ABRIR A TELA DE VENDAS RÁPIDA. */
 app.post("/verifica-comanda-aberta", (req, res) => {
