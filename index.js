@@ -1,7 +1,7 @@
 const express = require("express");
 const app = express();
 const port = 3000;
-const mysql = require("mysql");
+const mysql = require("mysql2");//ATUALIZEI
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
@@ -217,10 +217,10 @@ const db0 = mysql.createPool({
 });
 
 const acessa_Database_Lojas = mysql.createPool({
-    host: "localhost",
+    host: "127.0.0.1",
     user: "root",
     password: "123456",
-    database: `lojas`,
+    database: `lojas`, 
 });
 
 const dbPixGerados = mysql.createPool({
